@@ -10,7 +10,7 @@ services:
     autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
-        value: 3.11.0
+        value: 3.12.0
       - key: PORT
         value: 8000
       # Add your OpenAI API key here if you have one
