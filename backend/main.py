@@ -1116,6 +1116,25 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "articles_count": len(articles)}
 
+@app.get("/api/health/history")
+async def health_check_history():
+    """Health check specifically for history functionality"""
+    try:
+        return {
+            "status": "healthy",
+            "articles_count": len(articles),
+            "thesis_count": len(thesis_uploads),
+            "articles_sample": [{"url": article.get("url", "No URL"), "title": article.get("title", "No Title")} for article in articles[:3]],
+            "thesis_sample": [{"id": thesis.get("id", "No ID"), "filename": thesis.get("filename", "No Filename")} for thesis in thesis_uploads[:3]]
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "error": str(e),
+            "articles_count": len(articles) if 'articles' in locals() else "Unknown",
+            "thesis_count": len(thesis_uploads) if 'thesis_uploads' in locals() else "Unknown"
+        }
+
 @app.get("/api/")
 async def api_info():
     """API information endpoint"""
@@ -1141,45 +1160,53 @@ async def get_history():
     print(f"   Articles: {len(articles)}")
     print(f"   Thesis uploads: {len(thesis_uploads)}")
     
-    history_items = []
-    
-    # Add sources (individual articles) - this is what you want to see
-    for i, article in enumerate(articles):
-        print(f"   📰 Processing article {i+1}: {article.get('url', 'No URL')}")
+    try:
+        history_items = []
         
-        # Check if this source is starred
-        is_starred = article.get("is_starred", False)
+        # Add sources (individual articles) - this is what you want to see
+        for i, article in enumerate(articles):
+            print(f"   📰 Processing article {i+1}: {article.get('url', 'No URL')}")
+            
+            # Check if this source is starred
+            is_starred = article.get("is_starred", False)
+            
+            history_items.append({
+                "id": f"source_{i}",
+                "type": "source",
+                "url": article["url"],
+                "title": article.get("title", f"Content from {article['url']}"),
+                "summary": article.get("summary", ""),
+                "keywords": article.get("keywords", []),
+                "companies": article.get("companies", []),
+                "timestamp": article.get("publish_date", article.get("upload_time", datetime.now().isoformat())),
+                "is_starred": is_starred,
+                "source_type": "individual_source"
+            })
         
-        history_items.append({
-            "id": f"source_{i}",
-            "type": "source",
-            "url": article["url"],
-            "title": article.get("title", f"Content from {article['url']}"),
-            "summary": article.get("summary", ""),
-            "keywords": article.get("keywords", []),
-            "companies": article.get("companies", []),
-            "timestamp": article.get("publish_date", article.get("upload_time", datetime.now().isoformat())),
-            "is_starred": is_starred,
-            "source_type": "individual_source"
-        })
-    
-    # Add thesis uploads (for reference)
-    for thesis in thesis_uploads:
-        history_items.append({
-            "id": thesis["id"],
-            "type": "thesis",
-            "title": f"Thesis: {thesis['filename'] or 'Text Input'}",
-            "content_length": thesis["content_length"],
-            "timestamp": thesis["upload_time"],
-            "is_starred": False,  # Thesis can't be starred
-            "source_type": "thesis"
-        })
-    
-    # Sort by timestamp (newest first)
-    history_items.sort(key=lambda x: x["timestamp"], reverse=True)
-    
-    print(f"📚 Returning {len(history_items)} history items")
-    return history_items
+        # Add thesis uploads (for reference)
+        for thesis in thesis_uploads:
+            history_items.append({
+                "id": thesis["id"],
+                "type": "thesis",
+                "title": f"Thesis: {thesis['filename'] or 'Text Input'}",
+                "content_length": thesis["content_length"],
+                "timestamp": thesis["upload_time"],
+                "is_starred": False,  # Thesis can't be starred
+                "source_type": "thesis"
+            })
+        
+        # Sort by timestamp (newest first)
+        history_items.sort(key=lambda x: x["timestamp"], reverse=True)
+        
+        print(f"📚 Returning {len(history_items)} history items")
+        print(f"📚 Sample item structure: {history_items[0] if history_items else 'No items'}")
+        
+        return history_items
+        
+    except Exception as e:
+        print(f"❌ Error in get_history: {e}")
+        print(f"❌ Error traceback: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"Error getting history: {str(e)}")
 
 @app.get("/api/history/sources")
 async def get_sources_history():
@@ -1256,15 +1283,14 @@ async def test_history():
         {
             "id": "test_1",
             "type": "source",
-            "content": "https://example.com/test-article",
+            "url": "https://example.com/test-article",
+            "title": "Test Article",
+            "summary": "This is a test article for debugging the history functionality.",
+            "keywords": ["test", "debug", "history"],
+            "companies": ["Test Company Inc"],
             "timestamp": "2024-01-28T10:00:00Z",
-            "details": {
-                "title": "Test Article",
-                "summary": "This is a test article for debugging the history functionality.",
-                "keywords": ["test", "debug", "history"],
-                "companies": ["Test Company Inc"],
-                "source": "https://example.com/test-article"
-            }
+            "is_starred": False,
+            "source_type": "individual_source"
         }
     ]
 

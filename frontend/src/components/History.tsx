@@ -46,10 +46,15 @@ export const History = () => {
     try {
       setIsLoading(true);
       setError(null);
-      console.log('🔍 Fetching history from:', `${API_BASE_URL}/api/history`);
       
-      const response = await fetch(`${API_BASE_URL}/api/history`);
+      const url = `${API_BASE_URL}/api/history`;
+      console.log('🔍 Fetching history from:', url);
+      console.log('🔍 API_BASE_URL:', API_BASE_URL);
+      console.log('🔍 Full URL:', url);
+      
+      const response = await fetch(url);
       console.log('📡 History response status:', response.status);
+      console.log('📡 History response status text:', response.statusText);
       console.log('📡 History response headers:', response.headers);
       
       if (!response.ok) {
@@ -60,7 +65,15 @@ export const History = () => {
       
       const data = await response.json();
       console.log('📊 History data received:', data);
-      setHistoryItems(data);
+      console.log('📊 History data type:', typeof data);
+      console.log('📊 History data length:', Array.isArray(data) ? data.length : 'Not an array');
+      
+      if (Array.isArray(data)) {
+        setHistoryItems(data);
+      } else {
+        console.error('❌ History data is not an array:', data);
+        setError('History data format error - expected array');
+      }
     } catch (err) {
       console.error('❌ History fetch error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch history');
@@ -259,9 +272,37 @@ export const History = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">History</h2>
-          <Badge variant="outline">
-            {historyItems.length} items
-          </Badge>
+          <div className="flex items-center gap-2">
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={() => fetchHistory()}
+              className="text-xs"
+            >
+              Refresh
+            </Button>
+            <Button 
+              variant="outline" 
+              size="sm" 
+              onClick={async () => {
+                try {
+                  const response = await fetch(`${API_BASE_URL}/api/health/history`);
+                  const data = await response.json();
+                  console.log('🏥 Health check result:', data);
+                  alert(`Health check: ${JSON.stringify(data, null, 2)}`);
+                } catch (err) {
+                  console.error('❌ Health check failed:', err);
+                  alert(`Health check failed: ${err}`);
+                }
+              }}
+              className="text-xs"
+            >
+              Test API
+            </Button>
+            <Badge variant="outline">
+              {historyItems.length} items
+            </Badge>
+          </div>
         </div>
         
         {historyItems.length === 0 ? (
