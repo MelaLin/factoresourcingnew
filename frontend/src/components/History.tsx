@@ -1,45 +1,44 @@
+import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, Calendar, Globe, FileText, Monitor, RefreshCw } from 'lucide-react';
-import { useState, useEffect } from 'react';
+import { Star, Globe, Calendar, FileText, RefreshCw, AlertCircle } from 'lucide-react';
 
-interface HistoryItem {
+interface Source {
   id: string;
-  type: 'source' | 'thesis';
-  url?: string;
+  type: 'source';
+  url: string;
   title: string;
-  summary?: string;
-  keywords?: string[];
-  companies?: string[];
+  summary: string;
+  keywords: string[];
+  companies: string[];
   timestamp: string;
   is_starred: boolean;
   source_type: string;
-  content_length?: number;
 }
 
-interface StarredBlog {
+interface Thesis {
   id: string;
-  url: string;
-  search_time: string;
-  total_articles_found: number;
-  last_monitored: string;
-  monitoring_frequency: string;
-  is_active: boolean;
+  type: 'thesis';
+  title: string;
+  content_length: number;
+  timestamp: string;
+  is_starred: boolean;
+  source_type: string;
 }
+
+type HistoryItem = Source | Thesis;
 
 export const History = () => {
   const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
-  const [starredBlogs, setStarredBlogs] = useState<StarredBlog[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isMonitoring, setIsMonitoring] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [showStarredOnly, setShowStarredOnly] = useState(false);
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
   useEffect(() => {
     fetchHistory();
-    fetchStarredBlogs();
   }, []);
 
   const fetchHistory = async () => {
@@ -47,33 +46,24 @@ export const History = () => {
       setIsLoading(true);
       setError(null);
       
-      const url = `${API_BASE_URL}/api/history`;
-      console.log('🔍 Fetching history from:', url);
-      console.log('🔍 API_BASE_URL:', API_BASE_URL);
-      console.log('🔍 Full URL:', url);
+      console.log('🔍 Fetching history from:', `${API_BASE_URL}/api/history`);
       
-      const response = await fetch(url);
-      console.log('📡 History response status:', response.status);
-      console.log('📡 History response status text:', response.statusText);
-      console.log('📡 History response headers:', response.headers);
+      const response = await fetch(`${API_BASE_URL}/api/history`);
+      console.log('📡 Response status:', response.status);
       
       if (!response.ok) {
-        const errorText = await response.text();
-        console.error('❌ History response error:', errorText);
-        throw new Error(`Failed to fetch history: ${response.status} - ${errorText}`);
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
       }
       
       const data = await response.json();
       console.log('📊 History data received:', data);
-      console.log('📊 History data type:', typeof data);
-      console.log('📊 History data length:', Array.isArray(data) ? data.length : 'Not an array');
       
       if (Array.isArray(data)) {
         setHistoryItems(data);
       } else {
-        console.error('❌ History data is not an array:', data);
-        setError('History data format error - expected array');
+        throw new Error('Invalid data format - expected array');
       }
+      
     } catch (err) {
       console.error('❌ History fetch error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch history');
@@ -82,97 +72,33 @@ export const History = () => {
     }
   };
 
-  const fetchStarredBlogs = async () => {
+  const toggleStar = async (itemId: string) => {
     try {
-      const response = await fetch(`${API_BASE_URL}/api/blogs/starred`);
-      if (!response.ok) throw new Error('Failed to fetch starred blogs');
-      const data = await response.json();
-      setStarredBlogs(data.starred_blogs || []);
-    } catch (err) {
-      console.error('Failed to fetch starred blogs:', err);
-    }
-  };
+      const item = historyItems.find(item => item.id === itemId);
+      if (!item || item.type !== 'source') return;
 
-  const toggleSourceStar = async (sourceId: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/sources/star/${sourceId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/sources/star/${itemId}`, {
         method: 'POST',
       });
-      if (!response.ok) throw new Error('Failed to toggle star');
-      
-      // Refresh history
+
+      if (!response.ok) {
+        throw new Error('Failed to toggle star');
+      }
+
+      // Refresh history to get updated star status
       await fetchHistory();
+      
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle star');
+      console.error('❌ Star toggle error:', err);
+      setError('Failed to toggle star');
     }
   };
 
-  const toggleBlogStar = async (blogId: string) => {
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/blogs/star/${blogId}`, {
-        method: 'POST',
-      });
-      if (!response.ok) throw new Error('Failed to toggle star');
-      
-      // Refresh both history and starred blogs
-      await fetchHistory();
-      await fetchStarredBlogs();
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to toggle star');
-    }
-  };
+  const filteredItems = showStarredOnly 
+    ? historyItems.filter(item => item.is_starred)
+    : historyItems;
 
-  const monitorStarredBlogs = async () => {
-    try {
-      setIsMonitoring(true);
-      const response = await fetch(`${API_BASE_URL}/api/blogs/monitor`, {
-        method: 'POST',
-      });
-      if (!response.ok) throw new Error('Failed to monitor blogs');
-      
-      const result = await response.json();
-      console.log('Monitoring result:', result);
-      
-      // Refresh data after monitoring
-      await fetchHistory();
-      await fetchStarredBlogs();
-      
-      // Show success message
-      alert(`Monitoring completed! Found ${result.total_new_articles} new articles.`);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to monitor blogs');
-    } finally {
-      setIsMonitoring(false);
-    }
-  };
-
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'blog_search':
-        return <Globe className="h-4 w-4" />;
-      case 'source':
-        return <FileText className="h-4 w-4" />;
-      case 'thesis':
-        return <FileText className="h-4 w-4" />;
-      default:
-        return <FileText className="h-4 w-4" />;
-    }
-  };
-
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case 'blog_search':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
-      case 'source':
-        return 'bg-green-100 text-green-800 border-green-200';
-      case 'thesis':
-        return 'bg-purple-100 text-purple-800 border-purple-200';
-      default:
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-    }
-  };
-
-  const formatTimestamp = (timestamp: string) => {
+  const formatDate = (timestamp: string) => {
     try {
       return new Date(timestamp).toLocaleDateString('en-US', {
         year: 'numeric',
@@ -182,13 +108,45 @@ export const History = () => {
         minute: '2-digit'
       });
     } catch {
-      return 'Unknown date';
+      return 'Invalid date';
+    }
+  };
+
+  const getTypeIcon = (type: string) => {
+    switch (type) {
+      case 'source':
+        return <Globe className="h-4 w-4 text-blue-600" />;
+      case 'thesis':
+        return <FileText className="h-4 w-4 text-purple-600" />;
+      default:
+        return <FileText className="h-4 w-4 text-gray-600" />;
+    }
+  };
+
+  const getTypeBadge = (type: string) => {
+    switch (type) {
+      case 'source':
+        return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Source</Badge>;
+      case 'thesis':
+        return <Badge variant="secondary" className="bg-purple-100 text-purple-800">Thesis</Badge>;
+      default:
+        return <Badge variant="outline">{type}</Badge>;
     }
   };
 
   if (isLoading) {
     return (
       <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold">History</h2>
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" disabled>
+              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+              Loading...
+            </Button>
+          </div>
+        </div>
+        
         {Array.from({ length: 3 }, (_, i) => (
           <Card key={i} className="animate-pulse">
             <CardHeader>
@@ -209,212 +167,177 @@ export const History = () => {
 
   if (error) {
     return (
-      <Card className="text-center py-12">
-        <CardContent>
-          <div className="text-red-500 mb-4">❌ Error: {error}</div>
-          <Button onClick={fetchHistory}>Try Again</Button>
-        </CardContent>
-      </Card>
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="text-2xl font-bold">History</h2>
+          <Button variant="outline" size="sm" onClick={fetchHistory}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Retry
+          </Button>
+        </div>
+        
+        <Card className="border-red-200 bg-red-50">
+          <CardContent className="pt-6">
+            <div className="flex items-center gap-3 text-red-800">
+              <AlertCircle className="h-5 w-5" />
+              <div>
+                <h3 className="font-semibold">Error Loading History</h3>
+                <p className="text-sm">{error}</p>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     );
   }
 
   return (
     <div className="space-y-6">
-      {/* Starred Blogs Section */}
-      {starredBlogs.length > 0 && (
-        <Card className="border-2 border-yellow-200 bg-yellow-50">
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                <Star className="h-5 w-5 text-yellow-600 fill-current" />
-                Starred Blogs ({starredBlogs.length})
-              </CardTitle>
-              <Button 
-                onClick={monitorStarredBlogs} 
-                disabled={isMonitoring}
-                className="bg-yellow-600 hover:bg-yellow-700"
-              >
-                {isMonitoring ? (
-                  <>
-                    <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-                    Monitoring...
-                  </>
-                ) : (
-                  <>
-                    <Monitor className="h-4 w-4 mr-2" />
-                    Monitor Now
-                  </>
-                )}
-              </Button>
-            </div>
-          </CardHeader>
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h2 className="text-2xl font-bold">History</h2>
+          <p className="text-muted-foreground">
+            {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
+            {showStarredOnly && ' (starred only)'}
+          </p>
+        </div>
+        
+        <div className="flex items-center gap-2">
+          <Button
+            variant={showStarredOnly ? "default" : "outline"}
+            size="sm"
+            onClick={() => setShowStarredOnly(!showStarredOnly)}
+          >
+            <Star className={`h-4 w-4 mr-2 ${showStarredOnly ? 'fill-current' : ''}`} />
+            {showStarredOnly ? 'Show All' : 'Starred Only'}
+          </Button>
+          
+          <Button variant="outline" size="sm" onClick={fetchHistory}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Refresh
+          </Button>
+        </div>
+      </div>
+
+      {/* Empty State */}
+      {filteredItems.length === 0 && (
+        <Card className="text-center py-12">
           <CardContent>
-            <div className="space-y-2">
-              {starredBlogs.map((blog) => (
-                <div key={blog.id} className="flex items-center justify-between p-2 bg-white rounded border">
-                  <div className="flex-1">
-                    <div className="font-medium text-sm">{blog.url}</div>
-                    <div className="text-xs text-gray-600">
-                      Last monitored: {formatTimestamp(blog.last_monitored)}
-                    </div>
-                  </div>
-                  <Badge variant="outline" className="text-xs">
-                    {blog.total_articles_found} articles
-                  </Badge>
-                </div>
-              ))}
-            </div>
+            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+            <h3 className="text-lg font-semibold mb-2">
+              {showStarredOnly ? 'No Starred Items' : 'No History Yet'}
+            </h3>
+            <p className="text-muted-foreground mb-4">
+              {showStarredOnly 
+                ? 'Star some sources to see them here'
+                : 'Start by uploading content sources or thesis to see your history'
+              }
+            </p>
+            {!showStarredOnly && (
+              <Button onClick={fetchHistory} variant="outline">
+                <RefreshCw className="h-4 w-4 mr-2" />
+                Refresh
+              </Button>
+            )}
           </CardContent>
         </Card>
       )}
 
       {/* History Items */}
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
-          <h2 className="text-2xl font-bold">History</h2>
-          <div className="flex items-center gap-2">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => fetchHistory()}
-              className="text-xs"
-            >
-              Refresh
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={async () => {
-                try {
-                  const response = await fetch(`${API_BASE_URL}/api/health/history`);
-                  const data = await response.json();
-                  console.log('🏥 Health check result:', data);
-                  alert(`Health check: ${JSON.stringify(data, null, 2)}`);
-                } catch (err) {
-                  console.error('❌ Health check failed:', err);
-                  alert(`Health check failed: ${err}`);
-                }
-              }}
-              className="text-xs"
-            >
-              Test API
-            </Button>
-            <Badge variant="outline">
-              {historyItems.length} items
-            </Badge>
-          </div>
-        </div>
-        
-        {historyItems.length === 0 ? (
-          <Card className="text-center py-12">
-            <CardContent>
-              <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-              <h3 className="text-lg font-semibold mb-2">No History Yet</h3>
-              <p className="text-muted-foreground">
-                Start by uploading content sources or thesis to see your history
-              </p>
-            </CardContent>
-          </Card>
-        ) : (
-          <div className="space-y-4">
-            {historyItems.map((item) => (
-              <Card key={item.id} className="transition-all duration-200 hover:shadow-lg">
-                <CardHeader className="pb-3">
-                  <div className="flex items-start justify-between gap-4">
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-2">
-                        {getTypeIcon(item.type)}
-                        <CardTitle className="text-lg font-semibold line-clamp-2">
-                          {item.title}
-                        </CardTitle>
-                        <Badge className={getTypeColor(item.type)}>
-                          {item.source_type.replace('_', ' ')}
-                        </Badge>
-                      </div>
-                      
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {formatTimestamp(item.timestamp)}
-                        </div>
-                        
-                        {item.type === 'blog_search' && (
-                          <>
-                            <span className="text-blue-600">
-                              {item.details.total_articles_found} articles found
-                            </span>
-                            <span className="text-green-600">
-                              {item.details.processed_articles} processed
-                            </span>
-                          </>
-                        )}
-                        
-                        {item.type === 'source' && item.url && (
-                          <span className="text-purple-600">
-                            <Globe className="h-3 w-3 inline mr-1" />
-                            {item.url}
-                          </span>
-                        )}
-                      </div>
+      {filteredItems.length > 0 && (
+        <div className="space-y-4">
+          {filteredItems.map((item) => (
+            <Card key={item.id} className="transition-all duration-200 hover:shadow-md">
+              <CardHeader className="pb-3">
+                <div className="flex items-start justify-between gap-4">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2">
+                      {getTypeIcon(item.type)}
+                      <CardTitle className="text-lg font-semibold line-clamp-2">
+                        {item.title}
+                      </CardTitle>
+                      {getTypeBadge(item.type)}
                     </div>
                     
-                    <div className="flex items-center gap-2 flex-shrink-0">
+                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                      <div className="flex items-center gap-1">
+                        <Calendar className="h-3 w-3" />
+                        {formatDate(item.timestamp)}
+                      </div>
+                      
                       {item.type === 'source' && (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => toggleSourceStar(item.id)}
-                          className={`hover:bg-yellow-100 ${
-                            item.is_starred ? 'text-yellow-600' : 'text-gray-400'
-                          }`}
-                        >
-                          <Star className={`h-4 w-4 ${item.is_starred ? 'fill-current' : ''}`} />
-                        </Button>
+                        <div className="flex items-center gap-1 text-blue-600">
+                          <Globe className="h-3 w-3" />
+                          <span className="truncate max-w-xs">{item.url}</span>
+                        </div>
+                      )}
+                      
+                      {item.type === 'thesis' && (
+                        <span className="text-purple-600">
+                          {item.content_length.toLocaleString()} characters
+                        </span>
                       )}
                     </div>
                   </div>
-                </CardHeader>
+                  
+                  {/* Star Button for Sources */}
+                  {item.type === 'source' && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleStar(item.id)}
+                      className={`hover:bg-yellow-100 ${
+                        item.is_starred ? 'text-yellow-600' : 'text-gray-400'
+                      }`}
+                    >
+                      <Star className={`h-4 w-4 ${item.is_starred ? 'fill-current' : ''}`} />
+                    </Button>
+                  )}
+                </div>
+              </CardHeader>
+              
+              {/* Content */}
+              <CardContent className="space-y-3">
+                {/* Summary */}
+                {item.type === 'source' && item.summary && (
+                  <p className="text-sm text-foreground/80 leading-relaxed">
+                    {item.summary}
+                  </p>
+                )}
                 
-                <CardContent className="space-y-3">
-                  {item.summary && (
-                    <p className="text-sm text-foreground/80 leading-relaxed">
-                      {item.summary}
-                    </p>
-                  )}
-                  
-                  {item.keywords && item.keywords.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium text-muted-foreground">Keywords</div>
-                      <div className="flex flex-wrap gap-2">
-                        {item.keywords.map((keyword, index) => (
-                          <Badge key={index} variant="secondary" className="text-xs">
-                            {keyword}
-                          </Badge>
-                        ))}
-                      </div>
+                {/* Keywords */}
+                {item.type === 'source' && item.keywords && item.keywords.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground">Keywords</div>
+                    <div className="flex flex-wrap gap-2">
+                      {item.keywords.map((keyword, index) => (
+                        <Badge key={index} variant="secondary" className="text-xs">
+                          {keyword}
+                        </Badge>
+                      ))}
                     </div>
-                  )}
-                  
-                  {item.companies && item.companies.length > 0 && (
-                    <div className="space-y-2">
-                      <div className="text-sm font-medium text-muted-foreground">Companies</div>
-                      <div className="flex flex-wrap gap-2">
-                        {item.companies.map((company, index) => (
-                          <Badge key={index} variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                            {company}
-                          </Badge>
-                        ))}
-                      </div>
+                  </div>
+                )}
+                
+                {/* Companies */}
+                {item.type === 'source' && item.companies && item.companies.length > 0 && (
+                  <div className="space-y-2">
+                    <div className="text-sm font-medium text-muted-foreground">Companies</div>
+                    <div className="flex flex-wrap gap-2">
+                      {item.companies.map((company, index) => (
+                        <Badge key={index} variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                          {company}
+                        </Badge>
+                      ))}
                     </div>
-                  )}
-                  
-
-                </CardContent>
-              </Card>
-            ))}
-          </div>
-        )}
-      </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
     </div>
   );
 };
