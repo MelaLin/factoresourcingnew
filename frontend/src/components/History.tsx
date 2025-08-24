@@ -6,23 +6,16 @@ import { useState, useEffect } from 'react';
 
 interface HistoryItem {
   id: string;
-  type: 'blog_search' | 'source' | 'thesis';
-  content: string;
+  type: 'source' | 'thesis';
+  url?: string;
+  title: string;
+  summary?: string;
+  keywords?: string[];
+  companies?: string[];
   timestamp: string;
-  details: {
-    title: string;
-    summary?: string;
-    keywords?: string[];
-    companies?: string[];
-    source?: string;
-    total_articles_found?: number;
-    processed_articles?: number;
-    is_starred?: boolean;
-    last_monitored?: string;
-    file_type?: string;
-    content_length?: number;
-    preview?: string;
-  };
+  is_starred: boolean;
+  source_type: string;
+  content_length?: number;
 }
 
 interface StarredBlog {
@@ -87,7 +80,21 @@ export const History = () => {
     }
   };
 
-  const toggleStar = async (blogId: string) => {
+  const toggleSourceStar = async (sourceId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/sources/star/${sourceId}`, {
+        method: 'POST',
+      });
+      if (!response.ok) throw new Error('Failed to toggle star');
+      
+      // Refresh history
+      await fetchHistory();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Failed to toggle star');
+    }
+  };
+
+  const toggleBlogStar = async (blogId: string) => {
     try {
       const response = await fetch(`${API_BASE_URL}/api/blogs/star/${blogId}`, {
         method: 'POST',
@@ -277,10 +284,10 @@ export const History = () => {
                       <div className="flex items-center gap-2 mb-2">
                         {getTypeIcon(item.type)}
                         <CardTitle className="text-lg font-semibold line-clamp-2">
-                          {item.details.title}
+                          {item.title}
                         </CardTitle>
                         <Badge className={getTypeColor(item.type)}>
-                          {item.type.replace('_', ' ')}
+                          {item.source_type.replace('_', ' ')}
                         </Badge>
                       </div>
                       
@@ -301,25 +308,26 @@ export const History = () => {
                           </>
                         )}
                         
-                        {item.type === 'source' && item.details.source && (
+                        {item.type === 'source' && item.url && (
                           <span className="text-purple-600">
-                            From: {item.details.source}
+                            <Globe className="h-3 w-3 inline mr-1" />
+                            {item.url}
                           </span>
                         )}
                       </div>
                     </div>
                     
                     <div className="flex items-center gap-2 flex-shrink-0">
-                      {item.type === 'blog_search' && (
+                      {item.type === 'source' && (
                         <Button
                           variant="ghost"
                           size="sm"
-                          onClick={() => toggleStar(item.id)}
+                          onClick={() => toggleSourceStar(item.id)}
                           className={`hover:bg-yellow-100 ${
-                            item.details.is_starred ? 'text-yellow-600' : 'text-gray-400'
+                            item.is_starred ? 'text-yellow-600' : 'text-gray-400'
                           }`}
                         >
-                          <Star className={`h-4 w-4 ${item.details.is_starred ? 'fill-current' : ''}`} />
+                          <Star className={`h-4 w-4 ${item.is_starred ? 'fill-current' : ''}`} />
                         </Button>
                       )}
                     </div>
@@ -327,17 +335,17 @@ export const History = () => {
                 </CardHeader>
                 
                 <CardContent className="space-y-3">
-                  {item.details.summary && (
+                  {item.summary && (
                     <p className="text-sm text-foreground/80 leading-relaxed">
-                      {item.details.summary}
+                      {item.summary}
                     </p>
                   )}
                   
-                  {item.details.keywords && item.details.keywords.length > 0 && (
+                  {item.keywords && item.keywords.length > 0 && (
                     <div className="space-y-2">
                       <div className="text-sm font-medium text-muted-foreground">Keywords</div>
                       <div className="flex flex-wrap gap-2">
-                        {item.details.keywords.map((keyword, index) => (
+                        {item.keywords.map((keyword, index) => (
                           <Badge key={index} variant="secondary" className="text-xs">
                             {keyword}
                           </Badge>
@@ -346,11 +354,11 @@ export const History = () => {
                     </div>
                   )}
                   
-                  {item.details.companies && item.details.companies.length > 0 && (
+                  {item.companies && item.companies.length > 0 && (
                     <div className="space-y-2">
                       <div className="text-sm font-medium text-muted-foreground">Companies</div>
                       <div className="flex flex-wrap gap-2">
-                        {item.details.companies.map((company, index) => (
+                        {item.companies.map((company, index) => (
                           <Badge key={index} variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
                             {company}
                           </Badge>
@@ -359,12 +367,7 @@ export const History = () => {
                     </div>
                   )}
                   
-                  {item.type === 'thesis' && item.details.preview && (
-                    <div className="bg-accent/30 rounded-lg p-3">
-                      <div className="text-sm font-medium text-secondary mb-1">Thesis Preview</div>
-                      <p className="text-sm text-foreground/80">{item.details.preview}</p>
-                    </div>
-                  )}
+
                 </CardContent>
               </Card>
             ))}

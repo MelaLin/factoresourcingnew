@@ -721,6 +721,38 @@ async def get_matches():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error retrieving matches: {str(e)}")
 
+@app.post("/api/sources/star/{source_id}")
+async def star_source(source_id: str):
+    """Star/unstar an individual source"""
+    try:
+        # Find the source by ID
+        source_index = int(source_id.replace("source_", ""))
+        if source_index < 0 or source_index >= len(articles):
+            raise HTTPException(status_code=404, detail="Source not found")
+        
+        article = articles[source_index]
+        
+        # Toggle star status
+        article["is_starred"] = not article.get("is_starred", False)
+        
+        if article["is_starred"]:
+            print(f"⭐ Source starred: {article['url']}")
+        else:
+            print(f"⭐ Source unstarred: {article['url']}")
+        
+        return {
+            "message": f"Source {'starred' if article['is_starred'] else 'unstarred'} successfully",
+            "source_id": source_id,
+            "is_starred": article["is_starred"],
+            "url": article["url"]
+        }
+        
+    except (ValueError, IndexError):
+        raise HTTPException(status_code=404, detail="Invalid source ID")
+    except Exception as e:
+        print(f"Error starring source: {e}")
+        raise HTTPException(status_code=500, detail=f"Error starring source: {str(e)}")
+
 @app.post("/api/blogs/star/{blog_id}")
 async def star_blog(blog_id: str):
     """Star a blog for continuous monitoring"""
@@ -767,6 +799,15 @@ async def star_blog(blog_id: str):
     except Exception as e:
         print(f"Error starring blog: {e}")
         raise HTTPException(status_code=500, detail=f"Error starring blog: {str(e)}")
+
+@app.get("/api/sources/starred")
+async def get_starred_sources():
+    """Get all starred sources"""
+    starred_sources = [article for article in articles if article.get("is_starred", False)]
+    return {
+        "starred_sources": starred_sources,
+        "total_starred": len(starred_sources)
+    }
 
 @app.get("/api/blogs/starred")
 async def get_starred_blogs():
@@ -1095,75 +1136,49 @@ async def api_info():
 
 @app.get("/api/history")
 async def get_history():
-    """Get all history items"""
+    """Get simplified history focused on sources"""
     print(f"📚 History requested - Current state:")
-    print(f"   Blog searches: {len(blog_searches)}")
     print(f"   Articles: {len(articles)}")
     print(f"   Thesis uploads: {len(thesis_uploads)}")
     
-    # Debug: Print actual content
-    if articles:
-        print(f"   📰 Sample article: {articles[0].get('title', 'No title')}")
-    if thesis_uploads:
-        print(f"   📝 Sample thesis: {thesis_uploads[0].get('filename', 'No filename')}")
-    
     history_items = []
     
-    # Add blog searches (including starred status)
-    for blog_search in blog_searches:
+    # Add sources (individual articles) - this is what you want to see
+    for i, article in enumerate(articles):
+        print(f"   📰 Processing article {i+1}: {article.get('url', 'No URL')}")
+        
+        # Check if this source is starred
+        is_starred = article.get("is_starred", False)
+        
         history_items.append({
-            "id": blog_search["id"],
-            "type": "blog_search",
-            "content": blog_search["url"],
-            "timestamp": blog_search["search_time"],
-            "details": {
-                "title": f"Blog Search: {blog_search['url']}",
-                "total_articles_found": blog_search["total_articles_found"],
-                "processed_articles": blog_search["processed_articles"],
-                "is_starred": blog_search["is_starred"],
-                "last_monitored": blog_search["last_monitored"],
-                "source": "blog_search"
-            }
-        })
-    
-    # Add sources (individual articles)
-    for article in articles:
-        print(f"   📰 Processing article: {article.get('url', 'No URL')}")
-        history_items.append({
-            "id": f"source_{len(history_items)}",
+            "id": f"source_{i}",
             "type": "source",
-            "content": article["url"],
+            "url": article["url"],
+            "title": article.get("title", f"Content from {article['url']}"),
+            "summary": article.get("summary", ""),
+            "keywords": article.get("keywords", []),
+            "companies": article.get("companies", []),
             "timestamp": article.get("publish_date", article.get("upload_time", datetime.now().isoformat())),
-            "details": {
-                "title": article.get("title", f"Content from {article['url']}"),
-                "summary": article.get("summary", ""),
-                "keywords": article.get("keywords", []),
-                "companies": article.get("companies", []),
-                "source": article.get("source_blog", article["url"])
-            }
+            "is_starred": is_starred,
+            "source_type": "individual_source"
         })
     
-    # Add actual thesis uploads
+    # Add thesis uploads (for reference)
     for thesis in thesis_uploads:
-        print(f"   📝 Processing thesis: {thesis.get('filename', 'No filename')}")
         history_items.append({
             "id": thesis["id"],
             "type": "thesis",
-            "content": thesis["filename"] or "Thesis Text",
+            "title": f"Thesis: {thesis['filename'] or 'Text Input'}",
+            "content_length": thesis["content_length"],
             "timestamp": thesis["upload_time"],
-            "details": {
-                "title": f"Thesis: {thesis['filename'] or 'Text Input'}",
-                "content_length": thesis["content_length"],
-                "file_type": thesis["file_type"],
-                "preview": thesis["summary"]
-            }
+            "is_starred": False,  # Thesis can't be starred
+            "source_type": "thesis"
         })
     
     # Sort by timestamp (newest first)
     history_items.sort(key=lambda x: x["timestamp"], reverse=True)
     
     print(f"📚 Returning {len(history_items)} history items")
-    print(f"📚 History items structure: {[item.get('type') for item in history_items]}")
     return history_items
 
 @app.get("/api/history/sources")
