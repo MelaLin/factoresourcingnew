@@ -7,7 +7,10 @@
     "dev:backend": "cd backend && python -m uvicorn main:app --reload --host 0.0.0.0 --port 8000",
     "dev:frontend": "cd frontend && npm run dev",
     "build": "cd frontend && npm run build",
-    "start": "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000"
+    "build:backend": "cd backend && pip install -r requirements.txt",
+    "build:frontend": "cd frontend && npm install && npm run build",
+    "start": "cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000",
+    "deploy:render": "npm run build:backend && npm run build:frontend"
   },
   "devDependencies": {
     "concurrently": "^8.2.2"

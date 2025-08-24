@@ -318,25 +318,30 @@ app = FastAPI(title="FactorESourcing API", description="Content sourcing and mat
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this properly for production
+    allow_origins=[
+        "https://factoresourcing.onrender.com",  # Your frontend service URL
+        "https://factoresourcingnew.onrender.com",  # Alternative frontend URL
+        "http://localhost:5173",  # Local development
+        "http://localhost:3000",  # Alternative local port
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Mount static files for React frontend
-# Simplified path detection to avoid hanging
+# Mount static files for React frontend (for local development)
+# In production, frontend will be served separately
 frontend_path = Path(__file__).parent / "frontend"
 
 print(f"🔍 Frontend path: {frontend_path}")
 print(f"🔍 Frontend exists: {frontend_path.exists()}")
 
-# Only mount static files if the directory exists
+# Only mount static files if the directory exists (local development)
 if frontend_path.exists() and (frontend_path / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(frontend_path / "assets")), name="assets")
-    print(f"✅ Static files mounted from: {frontend_path / 'assets'}")
+    print(f"✅ Static files mounted from: {frontend_path / 'assets'} (local development)")
 else:
-    print(f"⚠️  Static files directory not found at: {frontend_path / 'assets'}")
+    print(f"ℹ️  Static files not mounted - frontend will be served separately in production")
 
 # Data models
 class SourceRequest(BaseModel):
@@ -1069,21 +1074,22 @@ async def health_check():
 
 @app.get("/")
 async def root():
-    """Root endpoint - serves the React frontend"""
-    index_path = frontend_path / "index.html"
-    if index_path.exists():
-        return FileResponse(str(index_path))
-    else:
-        return {
-            "message": "FactorESourcing API + Frontend",
-            "status": "Frontend not built. Please run the deployment script.",
-            "frontend_path": str(frontend_path),
-            "api_endpoints": {
-                "GET /api/": "API information",
-                "GET /api/health": "Health check",
-                "GET /api/docs": "API documentation"
-            }
-        }
+    """Root endpoint - API information"""
+    return {
+        "message": "FactorESourcing API",
+        "status": "Backend service running",
+        "version": "1.0.0",
+        "frontend": "Frontend is served separately",
+        "api_endpoints": {
+            "GET /api/": "API information",
+            "GET /api/health": "Health check",
+            "GET /api/docs": "API documentation",
+            "POST /api/sources": "Add content source",
+            "POST /api/thesis/upload": "Upload thesis",
+            "GET /api/matches": "Get content matches"
+        },
+        "documentation": "/api/docs"
+    }
 
 @app.get("/api/history")
 async def get_history():
@@ -1221,50 +1227,26 @@ async def debug_state():
         "thesis_uploads": thesis_uploads
     }
 
-# Serve React frontend for all non-API routes
+# API-only routes - frontend is served separately in production
 @app.get("/{full_path:path}")
-async def serve_frontend(full_path: str):
-    """Serve React frontend for all non-API routes"""
+async def catch_all_routes(full_path: str):
+    """Catch-all route for non-API paths"""
     # Don't serve frontend for API routes
     if full_path.startswith("api"):
         raise HTTPException(status_code=404, detail="API endpoint not found")
     
-    # Handle root path specially
-    if full_path == "" or full_path == "/":
-        index_path = frontend_path / "index.html"
-        if index_path.exists():
-            return FileResponse(str(index_path))
-        else:
-            return {
-                "message": "Frontend not built. Please run the deployment script.",
-                "frontend_path": str(frontend_path),
-                "api_endpoints": {
-                    "GET /api/": "API information",
-                    "GET /api/health": "Health check",
-                    "GET /api/docs": "API documentation"
-                }
-            }
-    
-    # Try to serve the specific file first (for CSS, JS, images, etc.)
-    file_path = frontend_path / full_path
-    if file_path.exists() and file_path.is_file():
-        return FileResponse(str(file_path))
-    
-    # For all other routes, serve index.html (React Router will handle routing)
-    index_path = frontend_path / "index.html"
-    if index_path.exists():
-        return FileResponse(str(index_path))
-    
-    # Fallback if frontend is not built
+    # Return API information for non-API routes
     return {
-        "message": "Frontend not built or file not found.",
+        "message": "FactorESourcing API",
+        "status": "Route not found",
         "requested_path": full_path,
-        "frontend_path": str(frontend_path),
+        "note": "Frontend is served separately. This is the backend API only.",
         "api_endpoints": {
             "GET /api/": "API information",
             "GET /api/health": "Health check",
             "GET /api/docs": "API documentation"
-        }
+        },
+        "frontend_url": "Frontend is available at a separate URL"
     }
 
 if __name__ == "__main__":

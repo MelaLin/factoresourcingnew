@@ -11,8 +11,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { TrendingUp, FileSearch, Zap, Clock, Star } from 'lucide-react';
 
-// API base URL - connect to Render backend in production, local backend in development
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://sourcing-factore.onrender.com';
+// API base URL - configurable via environment variables
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
 // Empty initial state for matched content
 const initialMatchedContent: any[] = [];

@@ -1,0 +1,32 @@
+services:
+  # Backend Service (FastAPI)
+  - type: web
+    name: factoresourcing-backend
+    env: python
+    plan: free
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: python -m uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.9.16
+      - key: PORT
+        value: 8000
+      # Add your OpenAI API key here if you have one
+      # - key: OPENAI_API_KEY
+      #   value: your-openai-api-key-here
+
+  # Frontend Service (Static Site)
+  - type: web
+    name: factoresourcing-frontend
+    env: static
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install && npm run build
+    staticPublishPath: ./dist
+    envVars:
+      - key: VITE_API_BASE_URL
+        value: https://factoresourcing-backend.onrender.com
+      # This will be automatically set by Render
+      - key: NODE_VERSION
+        value: 18.17.0
