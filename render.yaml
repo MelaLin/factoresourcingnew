@@ -18,8 +18,10 @@ services:
       #   value: your-openai-api-key-here
 
   # Frontend Service (Static Site)
-  - type: static
+  - type: web
     name: factoresourcing-frontend
+    env: static
+    plan: starter
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
