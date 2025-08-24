@@ -1,0 +1,399 @@
+import openai
+import os
+import random
+import re
+import json
+
+openai.api_key = os.getenv("OPENAI_API_KEY")
+
+def summarize_text(text):
+    # Check if OpenAI API key is available
+    if not openai.api_key:
+        # Simple text-based summary when API is not available
+        words = text.split()
+        if len(words) > 100:
+            summary = ' '.join(words[:100]) + "..."
+        else:
+            summary = text
+        
+        # Extract basic keywords
+        keywords = extract_keywords_from_text(text)
+        return (summary, keywords)
+    
+    try:
+        prompt = f"""
+        Create a clear, accurate summary of the following text. Focus on:
+        - Main topic and key findings
+        - Important data, numbers, or statistics mentioned
+        - Key companies, technologies, or innovations discussed
+        - Main conclusions or implications
+        
+        Text to summarize:
+        {text[:3000]}
+        
+        Provide a concise summary in 2-3 sentences that captures the essential information accurately.
+        """
+        
+        response = openai.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an expert at creating accurate, informative summaries. Focus on factual information and key details."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=200,
+            temperature=0.1  # Lower temperature for more consistent, accurate output
+        )
+        
+        summary = response.choices[0].message.content
+        # Extract keywords from summary
+        keywords = extract_keywords_from_summary(summary)
+        return summary, keywords
+    except Exception as e:
+        print(f"OpenAI API error: {e}")
+        # Fallback to mock response
+        return (
+            "This is a fallback summary due to API issues. The content appears to be about various topics.",
+            ["fallback", "api", "content", "analysis", "error"]
+        )
+
+def generate_title_from_url(url: str) -> str:
+    """Generate a descriptive title from URL"""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        hostname = parsed.netloc
+        
+        # Extract meaningful parts from the path
+        path_parts = [part for part in parsed.path.split('/') if part and len(part) > 2]
+        
+        if path_parts:
+            # Use the last meaningful path segment
+            last_part = path_parts[-1].replace('-', ' ').replace('_', ' ').title()
+            return f"{last_part} - {hostname}"
+        else:
+            return f"Content from {hostname}"
+    except Exception:
+        return f"Content from {url}"
+
+def extract_companies_from_url(url: str) -> list:
+    """Extract company names from URL path"""
+    try:
+        from urllib.parse import urlparse
+        parsed = urlparse(url)
+        path_parts = [part for part in parsed.path.split('/') if part and len(part) > 2]
+        
+        # Look for company-like patterns in URL
+        companies = []
+        for part in path_parts:
+            if any(word in part.lower() for word in ['inc', 'corp', 'llc', 'tech', 'solutions']):
+                companies.append(part.replace('-', ' ').replace('_', ' ').title())
+        
+        return companies[:3]  # Return max 3 companies
+    except Exception:
+        return []
+
+def extract_companies(text, max_companies=10):
+    """Extract company names with improved accuracy and filtering"""
+    try:
+        # Enhanced prompt for better company detection
+        prompt = f"""
+        Extract ONLY real, specific company names from this text. 
+        
+        IMPORTANT RULES:
+        - Return ONLY actual company names, not generic terms
+        - DO NOT include words like "Capital", "Company", "Corp", "Inc", "LLC" alone
+        - DO NOT include generic business terms like "Energy", "Solutions", "Industries", "Green" alone
+        - DO NOT include single words that are common business terms
+        - Focus on recognizable brand names, startups, and established companies
+        - If unsure, exclude rather than include
+        - Return company names as they appear in the text (with proper capitalization)
+        
+        Text to analyze:
+        {text[:3000]}
+        
+        Return a JSON array of company names only, no explanations.
+        """
+        
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an expert at identifying real company names from text. Be very selective and only return actual companies. Never return generic business terms alone."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=200,
+            temperature=0.1
+        )
+        
+        companies_text = response.choices[0].message.content.strip()
+        
+        # Parse JSON response
+        try:
+            companies = json.loads(companies_text)
+            if isinstance(companies, list):
+                # Filter out generic terms and validate
+                filtered_companies = []
+                generic_terms = {
+                    'capital', 'company', 'corp', 'inc', 'llc', 'ltd', 'group', 'holdings',
+                    'energy', 'solutions', 'industries', 'green', 'sustainable', 'renewable',
+                    'technology', 'tech', 'systems', 'services', 'partners', 'ventures',
+                    'fund', 'investment', 'management', 'consulting', 'advisory'
+                }
+                
+                for company in companies:
+                    if isinstance(company, str) and company.strip():
+                        company_clean = company.strip()
+                        # Skip if it's just a generic term
+                        if company_clean.lower() in generic_terms:
+                            continue
+                        # Skip if it's too short or too generic
+                        if len(company_clean) < 3 or company_clean.lower() in ['the', 'and', 'or', 'for', 'with']:
+                            continue
+                        # Skip if it's just a common word
+                        if len(company_clean.split()) == 1 and company_clean.lower() in generic_terms:
+                            continue
+                        filtered_companies.append(company_clean)
+                
+                return filtered_companies[:max_companies]
+        except json.JSONDecodeError:
+            # Fallback: try to extract from text response
+            lines = companies_text.split('\n')
+            companies = []
+            for line in lines:
+                line = line.strip()
+                if line and not line.startswith('[') and not line.startswith(']') and not line.startswith('{') and not line.startswith('}'):
+                    # Remove quotes and commas
+                    company = line.strip('",').strip()
+                    if company and len(company) > 2:
+                        companies.append(company)
+            
+            return companies[:max_companies]
+            
+    except Exception as e:
+        print(f"Error extracting companies: {e}")
+        return []
+
+def embed_text(text):
+    # Check if OpenAI API key is available
+    if not openai.api_key:
+        # Simple hash-based embedding when API is not available
+        import hashlib
+        hash_obj = hashlib.md5(text.encode())
+        # Generate a 1536-dimensional vector from hash
+        embedding = []
+        for i in range(1536):
+            # Use different parts of the hash for each dimension
+            start = (i * 4) % len(hash_obj.hexdigest())
+            end = start + 4
+            if end <= len(hash_obj.hexdigest()):
+                embedding.append(float(int(hash_obj.hexdigest()[start:end], 16)) / 100000.0)
+            else:
+                embedding.append(0.0)
+        return embedding
+    
+    try:
+        response = openai.Embedding.create(
+            input=[text],
+            model="text-embedding-ada-002"
+        )
+        return response['data'][0]['embedding']
+    except Exception as e:
+        print(f"OpenAI API error: {e}")
+        # Fallback to mock embedding
+        return [random.random() for _ in range(1536)]
+
+def parse_thesis(thesis_text):
+    """Parse thesis text into meaningful points and extract key concepts"""
+    if not openai.api_key:
+        # Simple thesis parsing when API is not available
+        points = []
+        lines = thesis_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and len(line) > 10:  # Only meaningful lines
+                points.append(line)
+        
+        # Extract keywords from the thesis text
+        keywords = extract_keywords_from_text(thesis_text, max_keywords=8)
+        
+        print(f"Simple thesis parsing: {len(points)} points, {len(keywords)} keywords")
+        return points, keywords
+    
+    try:
+        prompt = f"""
+        Parse this thesis text into 3-5 key points and extract 5-8 important keywords/concepts.
+        Format the response as:
+        POINTS:
+        - Point 1
+        - Point 2
+        - Point 3
+        
+        KEYWORDS:
+        keyword1, keyword2, keyword3, keyword4, keyword5
+        
+        Thesis text:
+        {thesis_text}
+        """
+        
+        response = openai.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        
+        content = response.choices[0].message.content
+        
+        # Parse points
+        points_section = content.split('POINTS:')[1].split('KEYWORDS:')[0] if 'POINTS:' in content else ""
+        points = []
+        for line in points_section.split('\n'):
+            line = line.strip()
+            if line.startswith('-') and len(line) > 3:
+                points.append(line[1:].strip())
+        
+        # Parse keywords
+        keywords_section = content.split('KEYWORDS:')[1] if 'KEYWORDS:' in content else ""
+        keywords = []
+        if keywords_section:
+            keywords = [k.strip() for k in keywords_section.split(',') if k.strip()]
+        
+        return points, keywords
+        
+    except Exception as e:
+        print(f"Error parsing thesis: {e}")
+        # Fallback parsing
+        points = []
+        lines = thesis_text.split('\n')
+        for line in lines:
+            line = line.strip()
+            if line and len(line) > 10:
+                points.append(line)
+        return points, ["thesis", "analysis", "content"]
+
+def calculate_semantic_similarity(text1, text2):
+    """Calculate semantic similarity between two texts using keyword overlap and content analysis"""
+    if not openai.api_key:
+        # Simple similarity calculation based on word overlap
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+        
+        # Remove common stop words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'}
+        words1 = words1 - stop_words
+        words2 = words2 - stop_words
+        
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        
+        if len(union) == 0:
+            return 0.0
+        
+        # Calculate Jaccard similarity
+        jaccard = len(intersection) / len(union)
+        
+        # Boost similarity for important keywords
+        important_words = {'renewable', 'energy', 'sustainable', 'climate', 'carbon', 'technology', 'business', 'solutions', 'innovation', 'startup', 'funding', 'market'}
+        important_overlap = len(intersection.intersection(important_words))
+        
+        # Boost score if important words match
+        if important_overlap > 0:
+            jaccard += (important_overlap * 0.08)
+        
+        return max(0.0, min(jaccard, 1.0))
+    
+    try:
+        prompt = f"""
+        Rate the semantic similarity between these two texts on a scale of 0.0 to 1.0, where 1.0 is very similar and 0.0 is completely different.
+        Consider:
+        - Topic overlap
+        - Key concepts
+        - Intent/purpose
+        - Target audience
+        
+        Text 1: {text1}
+        Text 2: {text2}
+        
+        Return only a number between 0.0 and 1.0.
+        """
+        
+        response = openai.chat.completions.create(
+            model="gpt-4",
+            messages=[{"role": "user", "content": prompt}],
+        )
+        
+        result = response.choices[0].message.content.strip()
+        try:
+            return float(result)
+        except ValueError:
+            return 0.5  # Default if parsing fails
+            
+    except Exception as e:
+        print(f"Error calculating similarity: {e}")
+        # Fallback similarity
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        if len(union) == 0:
+            return 0.0
+        return len(intersection) / len(union)
+
+def extract_keywords_from_text(text, max_keywords=8):
+    """Extract keywords from text using simple text analysis"""
+    try:
+        # Simple keyword extraction based on word frequency
+        words = text.lower().split()
+        
+        # Remove common stop words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'}
+        
+        # Count word frequency
+        word_freq = {}
+        for word in words:
+            if len(word) > 3 and word not in stop_words and word.isalpha():
+                word_freq[word] = word_freq.get(word, 0) + 1
+        
+        # Sort by frequency and return top keywords
+        sorted_words = sorted(word_freq.items(), key=lambda x: x[1], reverse=True)
+        return [word for word, freq in sorted_words[:max_keywords]]
+        
+    except Exception as e:
+        print(f"Error extracting keywords: {e}")
+        return ["content", "article", "information"]
+
+def extract_keywords_from_summary(summary, max_keywords=8):
+    """Extract relevant keywords from a summary"""
+    try:
+        prompt = f"""
+        Extract 5-8 most relevant keywords from this summary. Focus on:
+        - Technical terms and technologies
+        - Industry-specific vocabulary
+        - Key concepts and themes
+        - Company or product names if mentioned
+        
+        Summary: {summary}
+        
+        Return only the keywords separated by commas, no explanations.
+        """
+        
+        response = openai.chat.completions.create(
+            model="gpt-3.5-turbo",
+            messages=[
+                {"role": "system", "content": "You are an expert at extracting relevant keywords from text."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=100,
+            temperature=0.1
+        )
+        
+        keywords_text = response.choices[0].message.content.strip()
+        # Split by commas and clean up
+        keywords = [kw.strip().lower() for kw in keywords_text.split(',') if kw.strip()]
+        return keywords[:max_keywords]
+        
+    except Exception as e:
+        print(f"Error extracting keywords: {e}")
+        # Fallback: simple word extraction
+        words = summary.lower().split()
+        # Filter out common words and short words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'}
+        keywords = [word for word in words if len(word) > 3 and word not in stop_words]
+        return keywords[:max_keywords]
