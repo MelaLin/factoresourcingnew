@@ -1072,14 +1072,13 @@ async def health_check():
     """Health check endpoint"""
     return {"status": "healthy", "articles_count": len(articles)}
 
-@app.get("/")
-async def root():
-    """Root endpoint - API information"""
+@app.get("/api/")
+async def api_info():
+    """API information endpoint"""
     return {
         "message": "FactorESourcing API",
         "status": "Backend service running",
         "version": "1.0.0",
-        "frontend": "Frontend is served separately",
         "api_endpoints": {
             "GET /api/": "API information",
             "GET /api/health": "Health check",
@@ -1227,27 +1226,31 @@ async def debug_state():
         "thesis_uploads": thesis_uploads
     }
 
-# API-only routes - frontend is served separately in production
+# Serve frontend static files
+@app.get("/")
+async def serve_frontend():
+    """Serve the main frontend page"""
+    return FileResponse("frontend/index.html")
+
+@app.get("/assets/{file_path:path}")
+async def serve_assets(file_path: str):
+    """Serve frontend assets (CSS, JS, images)"""
+    asset_path = f"frontend/assets/{file_path}"
+    if os.path.exists(asset_path):
+        return FileResponse(asset_path)
+    else:
+        raise HTTPException(status_code=404, detail="Asset not found")
+
+# Catch-all route for frontend routes (SPA routing)
 @app.get("/{full_path:path}")
 async def catch_all_routes(full_path: str):
-    """Catch-all route for non-API paths"""
+    """Catch-all route for frontend SPA routing"""
     # Don't serve frontend for API routes
     if full_path.startswith("api"):
         raise HTTPException(status_code=404, detail="API endpoint not found")
     
-    # Return API information for non-API routes
-    return {
-        "message": "FactorESourcing API",
-        "status": "Route not found",
-        "requested_path": full_path,
-        "note": "Frontend is served separately. This is the backend API only.",
-        "api_endpoints": {
-            "GET /api/": "API information",
-            "GET /api/health": "Health check",
-            "GET /api/docs": "API documentation"
-        },
-        "frontend_url": "Frontend is available at a separate URL"
-    }
+    # For all other routes, serve the frontend (SPA routing)
+    return FileResponse("frontend/index.html")
 
 if __name__ == "__main__":
     import uvicorn

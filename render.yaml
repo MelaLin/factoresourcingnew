@@ -1,7 +1,7 @@
 services:
-  # Backend Service (FastAPI)
+  # Single Service (FastAPI + Frontend)
   - type: web
-    name: factoresourcing-backend
+    name: factoresourcing
     env: python
     plan: starter
     rootDir: backend
@@ -16,18 +16,3 @@ services:
       # Add your OpenAI API key here if you have one
       # - key: OPENAI_API_KEY
       #   value: your-openai-api-key-here
-
-  # Frontend Service (Static Site)
-  - type: web
-    name: factoresourcing-frontend
-    env: static
-    plan: starter
-    rootDir: frontend
-    buildCommand: npm install && npm run build
-    staticPublishPath: ./dist
-    envVars:
-      - key: VITE_API_BASE_URL
-        value: https://factoresourcing-backend.onrender.com
-      # This will be automatically set by Render
-      - key: NODE_VERSION
-        value: 18.17.0

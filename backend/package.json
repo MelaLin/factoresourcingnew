@@ -1,0 +1,14 @@
+{
+  "name": "sourcing-factore",
+  "version": "1.0.0",
+  "description": "Content sourcing and matching platform",
+  "scripts": {
+    "build": "cd frontend && npm install && npm run build",
+    "dev": "cd frontend && npm run dev",
+    "install": "cd frontend && npm install"
+  },
+  "workspaces": [
+    "frontend"
+  ],
+  "private": true
+}
