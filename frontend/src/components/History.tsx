@@ -2,11 +2,20 @@ import { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Star, Globe, Calendar, FileText, RefreshCw, AlertCircle } from 'lucide-react';
+import { Star, Globe, Calendar, FileText, RefreshCw, AlertCircle, ExternalLink } from 'lucide-react';
+
+interface BlogUpload {
+  id: string;
+  url: string;
+  search_time: string;
+  total_articles_found: number;
+  processed_articles: number;
+  is_starred: boolean;
+  last_monitored?: string;
+}
 
 interface Source {
   id: string;
-  type: 'source';
   url: string;
   title: string;
   summary: string;
@@ -14,89 +23,110 @@ interface Source {
   companies: string[];
   timestamp: string;
   is_starred: boolean;
-  source_type: string;
+  source_blog?: string;
 }
 
 interface Thesis {
   id: string;
-  type: 'thesis';
-  title: string;
+  filename: string;
   content_length: number;
-  timestamp: string;
-  is_starred: boolean;
-  source_type: string;
+  upload_time: string;
+  file_type: string;
 }
 
-type HistoryItem = Source | Thesis;
-
 export const History = () => {
-  const [historyItems, setHistoryItems] = useState<HistoryItem[]>([]);
+  const [blogUploads, setBlogUploads] = useState<BlogUpload[]>([]);
+  const [sources, setSources] = useState<Source[]>([]);
+  const [thesisUploads, setThesisUploads] = useState<Thesis[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [showStarredOnly, setShowStarredOnly] = useState(false);
+  const [activeTab, setActiveTab] = useState<'blogs' | 'sources' | 'thesis'>('blogs');
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
   useEffect(() => {
-    fetchHistory();
+    fetchAllHistory();
   }, []);
 
-  const fetchHistory = async () => {
+  const fetchAllHistory = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      console.log('🔍 Fetching history from:', `${API_BASE_URL}/api/history`);
-      
-      const response = await fetch(`${API_BASE_URL}/api/history`);
-      console.log('📡 Response status:', response.status);
-      
-      if (!response.ok) {
-        throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+      // Fetch blog uploads
+      const blogsResponse = await fetch(`${API_BASE_URL}/api/blogs/starred`);
+      if (blogsResponse.ok) {
+        const blogsData = await blogsResponse.json();
+        setBlogUploads(blogsData.starred_blogs || []);
       }
       
-      const data = await response.json();
-      console.log('📊 History data received:', data);
+      // Fetch sources
+      const sourcesResponse = await fetch(`${API_BASE_URL}/api/history/sources`);
+      if (sourcesResponse.ok) {
+        const sourcesData = await sourcesResponse.json();
+        setSources(sourcesData || []);
+      }
       
-      if (Array.isArray(data)) {
-        setHistoryItems(data);
-      } else {
-        throw new Error('Invalid data format - expected array');
+      // Fetch thesis uploads
+      const thesisResponse = await fetch(`${API_BASE_URL}/api/history/thesis`);
+      if (thesisResponse.ok) {
+        const thesisData = await thesisResponse.json();
+        setThesisUploads(thesisData || []);
       }
       
     } catch (err) {
       console.error('❌ History fetch error:', err);
-      setError(err instanceof Error ? err.message : 'Failed to fetch history');
+      setError('Failed to fetch history data');
     } finally {
       setIsLoading(false);
     }
   };
 
-  const toggleStar = async (itemId: string) => {
+  const toggleBlogStar = async (blogId: string) => {
     try {
-      const item = historyItems.find(item => item.id === itemId);
-      if (!item || item.type !== 'source') return;
-
-      const response = await fetch(`${API_BASE_URL}/api/sources/star/${itemId}`, {
+      const response = await fetch(`${API_BASE_URL}/api/blogs/star/${blogId}`, {
         method: 'POST',
       });
 
       if (!response.ok) {
-        throw new Error('Failed to toggle star');
+        throw new Error('Failed to toggle blog star');
       }
 
-      // Refresh history to get updated star status
-      await fetchHistory();
+      // Refresh blog data
+      const blogsResponse = await fetch(`${API_BASE_URL}/api/blogs/starred`);
+      if (blogsResponse.ok) {
+        const blogsData = await blogsResponse.json();
+        setBlogUploads(blogsData.starred_blogs || []);
+      }
       
     } catch (err) {
-      console.error('❌ Star toggle error:', err);
-      setError('Failed to toggle star');
+      console.error('❌ Blog star toggle error:', err);
+      setError('Failed to toggle blog star');
     }
   };
 
-  const filteredItems = showStarredOnly 
-    ? historyItems.filter(item => item.is_starred)
-    : historyItems;
+  const toggleSourceStar = async (sourceId: string) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/sources/star/${sourceId}`, {
+        method: 'POST',
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to toggle source star');
+      }
+
+      // Refresh sources data
+      const sourcesResponse = await fetch(`${API_BASE_URL}/api/history/sources`);
+      if (sourcesResponse.ok) {
+        const sourcesData = await sourcesResponse.json();
+        setSources(sourcesData || []);
+      }
+      
+    } catch (err) {
+      console.error('❌ Source star toggle error:', err);
+      setError('Failed to toggle source star');
+    }
+  };
 
   const formatDate = (timestamp: string) => {
     try {
@@ -112,26 +142,10 @@ export const History = () => {
     }
   };
 
-  const getTypeIcon = (type: string) => {
-    switch (type) {
-      case 'source':
-        return <Globe className="h-4 w-4 text-blue-600" />;
-      case 'thesis':
-        return <FileText className="h-4 w-4 text-purple-600" />;
-      default:
-        return <FileText className="h-4 w-4 text-gray-600" />;
-    }
-  };
-
-  const getTypeBadge = (type: string) => {
-    switch (type) {
-      case 'source':
-        return <Badge variant="secondary" className="bg-blue-100 text-blue-800">Source</Badge>;
-      case 'thesis':
-        return <Badge variant="secondary" className="bg-purple-100 text-purple-800">Thesis</Badge>;
-      default:
-        return <Badge variant="outline">{type}</Badge>;
-    }
+  const getStarredCount = () => {
+    const starredBlogs = blogUploads.filter(blog => blog.is_starred).length;
+    const starredSources = sources.filter(source => source.is_starred).length;
+    return starredBlogs + starredSources;
   };
 
   if (isLoading) {
@@ -139,12 +153,10 @@ export const History = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">History</h2>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" disabled>
-              <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
-              Loading...
-            </Button>
-          </div>
+          <Button variant="outline" size="sm" disabled>
+            <RefreshCw className="h-4 w-4 mr-2 animate-spin" />
+            Loading...
+          </Button>
         </div>
         
         {Array.from({ length: 3 }, (_, i) => (
@@ -170,7 +182,7 @@ export const History = () => {
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="text-2xl font-bold">History</h2>
-          <Button variant="outline" size="sm" onClick={fetchHistory}>
+          <Button variant="outline" size="sm" onClick={fetchAllHistory}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Retry
           </Button>
@@ -198,144 +210,268 @@ export const History = () => {
         <div>
           <h2 className="text-2xl font-bold">History</h2>
           <p className="text-muted-foreground">
-            {filteredItems.length} item{filteredItems.length !== 1 ? 's' : ''}
-            {showStarredOnly && ' (starred only)'}
+            {getStarredCount()} starred items • {blogUploads.length} blogs • {sources.length} sources • {thesisUploads.length} thesis
           </p>
         </div>
         
-        <div className="flex items-center gap-2">
-          <Button
-            variant={showStarredOnly ? "default" : "outline"}
-            size="sm"
-            onClick={() => setShowStarredOnly(!showStarredOnly)}
-          >
-            <Star className={`h-4 w-4 mr-2 ${showStarredOnly ? 'fill-current' : ''}`} />
-            {showStarredOnly ? 'Show All' : 'Starred Only'}
-          </Button>
-          
-          <Button variant="outline" size="sm" onClick={fetchHistory}>
-            <RefreshCw className="h-4 w-4 mr-2" />
-            Refresh
-          </Button>
-        </div>
+        <Button variant="outline" size="sm" onClick={fetchAllHistory}>
+          <RefreshCw className="h-4 w-4 mr-2" />
+          Refresh
+        </Button>
       </div>
 
-      {/* Empty State */}
-      {filteredItems.length === 0 && (
-        <Card className="text-center py-12">
-          <CardContent>
-            <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-            <h3 className="text-lg font-semibold mb-2">
-              {showStarredOnly ? 'No Starred Items' : 'No History Yet'}
-            </h3>
-            <p className="text-muted-foreground mb-4">
-              {showStarredOnly 
-                ? 'Star some sources to see them here'
-                : 'Start by uploading content sources or thesis to see your history'
-              }
-            </p>
-            {!showStarredOnly && (
-              <Button onClick={fetchHistory} variant="outline">
-                <RefreshCw className="h-4 w-4 mr-2" />
-                Refresh
-              </Button>
-            )}
-          </CardContent>
-        </Card>
-      )}
+      {/* Tab Navigation */}
+      <div className="flex space-x-1 bg-muted p-1 rounded-lg">
+        <Button
+          variant={activeTab === 'blogs' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('blogs')}
+          className="flex-1"
+        >
+          <Globe className="h-4 w-4 mr-2" />
+          Blog Uploads ({blogUploads.length})
+        </Button>
+        <Button
+          variant={activeTab === 'sources' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('sources')}
+          className="flex-1"
+        >
+          <FileText className="h-4 w-4 mr-2" />
+          Sources ({sources.length})
+        </Button>
+        <Button
+          variant={activeTab === 'thesis' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('thesis')}
+          className="flex-1"
+        >
+          <FileText className="h-4 w-4 mr-2" />
+          Thesis ({thesisUploads.length})
+        </Button>
+      </div>
 
-      {/* History Items */}
-      {filteredItems.length > 0 && (
+      {/* Blog Uploads Tab */}
+      {activeTab === 'blogs' && (
         <div className="space-y-4">
-          {filteredItems.map((item) => (
-            <Card key={item.id} className="transition-all duration-200 hover:shadow-md">
-              <CardHeader className="pb-3">
-                <div className="flex items-start justify-between gap-4">
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      {getTypeIcon(item.type)}
-                      <CardTitle className="text-lg font-semibold line-clamp-2">
-                        {item.title}
-                      </CardTitle>
-                      {getTypeBadge(item.type)}
-                    </div>
-                    
-                    <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                      <div className="flex items-center gap-1">
-                        <Calendar className="h-3 w-3" />
-                        {formatDate(item.timestamp)}
+          {blogUploads.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <Globe className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Blog Uploads Yet</h3>
+                <p className="text-muted-foreground">
+                  Upload blogs to see them in your history
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            blogUploads.map((blog) => (
+              <Card key={blog.id} className="transition-all duration-200 hover:shadow-md">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Globe className="h-4 w-4 text-blue-600" />
+                        <CardTitle className="text-lg font-semibold line-clamp-2">
+                          {blog.url}
+                        </CardTitle>
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                          Blog
+                        </Badge>
                       </div>
                       
-                      {item.type === 'source' && (
-                        <div className="flex items-center gap-1 text-blue-600">
-                          <Globe className="h-3 w-3" />
-                          <span className="truncate max-w-xs">{item.url}</span>
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {formatDate(blog.search_time)}
                         </div>
-                      )}
-                      
-                      {item.type === 'thesis' && (
-                        <span className="text-purple-600">
-                          {item.content_length.toLocaleString()} characters
+                        
+                        <span className="text-blue-600">
+                          {blog.total_articles_found} articles found
                         </span>
-                      )}
+                        
+                        <span className="text-green-600">
+                          {blog.processed_articles} processed
+                        </span>
+                        
+                        {blog.last_monitored && (
+                          <span className="text-purple-600">
+                            Last monitored: {formatDate(blog.last_monitored)}
+                          </span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  
-                  {/* Star Button for Sources */}
-                  {item.type === 'source' && (
+                    
                     <Button
                       variant="ghost"
                       size="sm"
-                      onClick={() => toggleStar(item.id)}
+                      onClick={() => toggleBlogStar(blog.id)}
                       className={`hover:bg-yellow-100 ${
-                        item.is_starred ? 'text-yellow-600' : 'text-gray-400'
+                        blog.is_starred ? 'text-yellow-600' : 'text-gray-400'
                       }`}
                     >
-                      <Star className={`h-4 w-4 ${item.is_starred ? 'fill-current' : ''}`} />
+                      <Star className={`h-4 w-4 ${blog.is_starred ? 'fill-current' : ''}`} />
                     </Button>
-                  )}
-                </div>
-              </CardHeader>
-              
-              {/* Content */}
-              <CardContent className="space-y-3">
-                {/* Summary */}
-                {item.type === 'source' && item.summary && (
-                  <p className="text-sm text-foreground/80 leading-relaxed">
-                    {item.summary}
-                  </p>
-                )}
-                
-                {/* Keywords */}
-                {item.type === 'source' && item.keywords && item.keywords.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium text-muted-foreground">Keywords</div>
-                    <div className="flex flex-wrap gap-2">
-                      {item.keywords.map((keyword, index) => (
-                        <Badge key={index} variant="secondary" className="text-xs">
-                          {keyword}
-                        </Badge>
-                      ))}
-                    </div>
                   </div>
-                )}
-                
-                {/* Companies */}
-                {item.type === 'source' && item.companies && item.companies.length > 0 && (
-                  <div className="space-y-2">
-                    <div className="text-sm font-medium text-muted-foreground">Companies</div>
-                    <div className="flex flex-wrap gap-2">
-                      {item.companies.map((company, index) => (
-                        <Badge key={index} variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
-                          {company}
-                        </Badge>
-                      ))}
-                    </div>
-                  </div>
-                )}
+                </CardHeader>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Sources Tab */}
+      {activeTab === 'sources' && (
+        <div className="space-y-4">
+          {sources.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Sources Yet</h3>
+                <p className="text-muted-foreground">
+                  Add content sources to see them in your history
+                </p>
               </CardContent>
             </Card>
-          ))}
+          ) : (
+            sources.map((source) => (
+              <Card key={source.id} className="transition-all duration-200 hover:shadow-md">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText className="h-4 w-4 text-green-600" />
+                        <CardTitle className="text-lg font-semibold line-clamp-2">
+                          {source.title}
+                        </CardTitle>
+                        <Badge variant="secondary" className="bg-green-100 text-green-800">
+                          Source
+                        </Badge>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {formatDate(source.timestamp)}
+                        </div>
+                        
+                        <div className="flex items-center gap-1 text-blue-600">
+                          <Globe className="h-3 w-3" />
+                          <span className="truncate max-w-xs">{source.url}</span>
+                        </div>
+                        
+                        {source.source_blog && (
+                          <span className="text-purple-600">
+                            From: {source.source_blog}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => toggleSourceStar(source.id)}
+                      className={`hover:bg-yellow-100 ${
+                        source.is_starred ? 'text-yellow-600' : 'text-gray-400'
+                      }`}
+                    >
+                      <Star className={`h-4 w-4 ${source.is_starred ? 'fill-current' : ''}`} />
+                    </Button>
+                  </div>
+                </CardHeader>
+                
+                <CardContent className="space-y-3">
+                  {/* Summary */}
+                  {source.summary && (
+                    <p className="text-sm text-foreground/80 leading-relaxed">
+                      {source.summary}
+                    </p>
+                  )}
+                  
+                  {/* Keywords */}
+                  {source.keywords && source.keywords.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-muted-foreground">Keywords</div>
+                      <div className="flex flex-wrap gap-2">
+                        {source.keywords.map((keyword, index) => (
+                          <Badge key={index} variant="secondary" className="text-xs">
+                            {keyword}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {/* Companies */}
+                  {source.companies && source.companies.length > 0 && (
+                    <div className="space-y-2">
+                      <div className="text-sm font-medium text-muted-foreground">Companies</div>
+                      <div className="flex flex-wrap gap-2">
+                        {source.companies.map((company, index) => (
+                          <Badge key={index} variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                            {company}
+                          </Badge>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Thesis Tab */}
+      {activeTab === 'thesis' && (
+        <div className="space-y-4">
+          {thesisUploads.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <FileText className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Thesis Uploads Yet</h3>
+                <p className="text-muted-foreground">
+                  Upload thesis files to see them in your history
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            thesisUploads.map((thesis) => (
+              <Card key={thesis.id} className="transition-all duration-200 hover:shadow-md">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText className="h-4 w-4 text-purple-600" />
+                        <CardTitle className="text-lg font-semibold line-clamp-2">
+                          {thesis.filename}
+                        </CardTitle>
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+                          Thesis
+                        </Badge>
+                      </div>
+                      
+                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                        <div className="flex items-center gap-1">
+                          <Calendar className="h-3 w-3" />
+                          {formatDate(thesis.upload_time)}
+                        </div>
+                        
+                        <span className="text-purple-600">
+                          {thesis.content_length.toLocaleString()} characters
+                        </span>
+                        
+                        <span className="text-gray-600">
+                          {thesis.file_type} file
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+              </Card>
+            ))
+          )}
         </div>
       )}
     </div>

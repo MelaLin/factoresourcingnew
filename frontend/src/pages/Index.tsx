@@ -4,12 +4,13 @@ import { ThesisUpload } from '@/components/ThesisUpload';
 import { ThesisTextInput } from '@/components/ThesisTextInput';
 import { ContentMatchView } from '@/components/ContentMatchView';
 import { BlogUpload } from '@/components/BlogUpload';
-import { History } from '@/components/History';
+
 import { ScholarPatentsSearch } from '@/components/ScholarPatentsSearch';
+import { History } from '@/components/History';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, FileSearch, Zap, Clock, Star } from 'lucide-react';
+import { TrendingUp, FileSearch, Zap, Clock, Star, Globe } from 'lucide-react';
 
 // API base URL - when served from backend, use relative paths
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -25,7 +26,6 @@ const Index = () => {
   const [isLoadingThesis, setIsLoadingThesis] = useState(false);
   const [isLoadingBlog, setIsLoadingBlog] = useState(false);
   const [matchedContent, setMatchedContent] = useState(initialMatchedContent);
-  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   const fetchMatches = async () => {
     try {
@@ -85,8 +85,6 @@ const Index = () => {
         console.log('Source added successfully:', url);
         // Fetch updated matches after adding source
         await fetchMatches();
-        // Refresh history
-        setHistoryRefreshKey(prev => prev + 1);
       } else {
         const errorData = await response.text();
         console.error('Source API error response:', errorData);
@@ -121,8 +119,6 @@ const Index = () => {
         console.log('Thesis uploaded successfully:', file.name);
         // Trigger content matching after thesis upload
         await fetchMatches();
-        // Refresh history
-        setHistoryRefreshKey(prev => prev + 1);
       } else {
         const errorData = await response.text();
         console.error('Thesis upload error response:', errorData);
@@ -162,8 +158,6 @@ const Index = () => {
         console.log('Thesis text submitted successfully');
         // Trigger content matching after thesis submission
         await fetchMatches();
-        // Refresh history
-        setHistoryRefreshKey(prev => prev + 1);
       } else {
         const errorData = await response.text();
         console.error('Thesis text error response:', errorData);
@@ -193,8 +187,6 @@ const Index = () => {
         const result = await response.json();
         console.log('Blog upload result:', result);
         await fetchMatches(); // Trigger update
-        // Refresh history
-        setHistoryRefreshKey(prev => prev + 1);
       } else {
         console.error('Failed to upload blog');
       }
@@ -227,10 +219,12 @@ const Index = () => {
               <Zap className="h-4 w-4" />
               Setup
             </TabsTrigger>
+
             <TabsTrigger value="history" className="flex items-center gap-2">
               <Clock className="h-4 w-4" />
               History
             </TabsTrigger>
+
             <TabsTrigger value="matches" className="flex items-center gap-2">
               <FileSearch className="h-4 w-4" />
               Matches
@@ -364,7 +358,7 @@ const Index = () => {
           </TabsContent>
 
           <TabsContent value="history" className="space-y-8">
-            <History key={historyRefreshKey} />
+            <History />
           </TabsContent>
 
           <TabsContent value="matches">
