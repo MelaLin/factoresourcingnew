@@ -42,7 +42,7 @@ export const History = () => {
   const [isMonitoring, setIsMonitoring] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
 
   useEffect(() => {
     fetchHistory();
@@ -52,11 +52,24 @@ export const History = () => {
   const fetchHistory = async () => {
     try {
       setIsLoading(true);
+      setError(null);
+      console.log('🔍 Fetching history from:', `${API_BASE_URL}/api/history`);
+      
       const response = await fetch(`${API_BASE_URL}/api/history`);
-      if (!response.ok) throw new Error('Failed to fetch history');
+      console.log('📡 History response status:', response.status);
+      console.log('📡 History response headers:', response.headers);
+      
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('❌ History response error:', errorText);
+        throw new Error(`Failed to fetch history: ${response.status} - ${errorText}`);
+      }
+      
       const data = await response.json();
+      console.log('📊 History data received:', data);
       setHistoryItems(data);
     } catch (err) {
+      console.error('❌ History fetch error:', err);
       setError(err instanceof Error ? err.message : 'Failed to fetch history');
     } finally {
       setIsLoading(false);

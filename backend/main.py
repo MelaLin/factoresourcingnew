@@ -1053,6 +1053,11 @@ async def api_info():
 @app.get("/api/history")
 async def get_history():
     """Get all history items"""
+    print(f"📚 History requested - Current state:")
+    print(f"   Blog searches: {len(blog_searches)}")
+    print(f"   Articles: {len(articles)}")
+    print(f"   Thesis uploads: {len(thesis_uploads)}")
+    
     history_items = []
     
     # Add blog searches (including starred status)
@@ -1106,6 +1111,7 @@ async def get_history():
     # Sort by timestamp (newest first)
     history_items.sort(key=lambda x: x["timestamp"], reverse=True)
     
+    print(f"📚 Returning {len(history_items)} history items")
     return history_items
 
 @app.get("/api/history/sources")
@@ -1175,6 +1181,25 @@ async def debug_state():
         "articles_urls": [article.get('url', 'No URL') for article in articles[:5]],  # First 5
         "thesis_uploads": thesis_uploads
     }
+
+@app.get("/api/test/history")
+async def test_history():
+    """Test endpoint to return sample history data"""
+    return [
+        {
+            "id": "test_1",
+            "type": "source",
+            "content": "https://example.com/test-article",
+            "timestamp": "2024-01-28T10:00:00Z",
+            "details": {
+                "title": "Test Article",
+                "summary": "This is a test article for debugging the history functionality.",
+                "keywords": ["test", "debug", "history"],
+                "companies": ["Test Company Inc"],
+                "source": "https://example.com/test-article"
+            }
+        }
+    ]
 
 # Serve frontend static files
 @app.get("/")
