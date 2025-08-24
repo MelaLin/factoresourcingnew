@@ -480,7 +480,7 @@ async def upload_thesis(file: UploadFile = File(...)):
                 "filename": file.filename,
                 "file_type": os.path.splitext(file.filename)[1],
                 "content_length": len(text),
-                "upload_time": "2024-01-28T10:00:00Z",
+                "upload_time": datetime.now().isoformat(),
                 "summary": f"Processed {len(text)} characters from {file.filename}"
             }
             thesis_uploads.append(thesis_info)
@@ -655,6 +655,49 @@ async def upload_blog(request: BlogUploadRequest):
     except Exception as e:
         print(f"Blog upload error: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing blog: {str(e)}")
+
+@app.post("/api/thesis/text")
+async def add_thesis_text(request: dict):
+    """Add thesis text directly (for copy-paste)"""
+    try:
+        text = request.get("text", "").strip()
+        if not text:
+            raise HTTPException(status_code=400, detail="Thesis text cannot be empty")
+        
+        print(f"✅ Adding thesis text input")
+        print(f"   Text length: {len(text)} characters")
+        print(f"   First 200 chars: {text[:200]}...")
+        
+        # Add thesis to vector store
+        add_thesis(text)
+        
+        # Track thesis upload for history
+        thesis_info = {
+            "id": f"thesis_text_{len(thesis_uploads) + 1}",
+            "filename": "Text Input",
+            "file_type": ".txt",
+            "content_length": len(text),
+            "upload_time": datetime.now().isoformat(),
+            "summary": f"Processed {len(text)} characters from text input"
+        }
+        thesis_uploads.append(thesis_info)
+        print(f"📝 Thesis text tracked for history: {thesis_info}")
+        
+        # Trigger immediate content matching analysis
+        print("🔄 Triggering content matching analysis...")
+        matches = find_relevant_articles(articles)
+        print(f"   Found {len(matches)} potential matches")
+        
+        return {
+            "message": "Thesis text added successfully and content matching completed",
+            "content_length": len(text),
+            "thesis_processed": True,
+            "matches_found": len(matches)
+        }
+        
+    except Exception as e:
+        print(f"❌ Error adding thesis text: {e}")
+        raise HTTPException(status_code=500, detail=f"Error processing thesis text: {str(e)}")
 
 @app.get("/api/matches", response_model=List[MatchResponse])
 async def get_matches():
@@ -1058,6 +1101,12 @@ async def get_history():
     print(f"   Articles: {len(articles)}")
     print(f"   Thesis uploads: {len(thesis_uploads)}")
     
+    # Debug: Print actual content
+    if articles:
+        print(f"   📰 Sample article: {articles[0].get('title', 'No title')}")
+    if thesis_uploads:
+        print(f"   📝 Sample thesis: {thesis_uploads[0].get('filename', 'No filename')}")
+    
     history_items = []
     
     # Add blog searches (including starred status)
@@ -1079,11 +1128,12 @@ async def get_history():
     
     # Add sources (individual articles)
     for article in articles:
+        print(f"   📰 Processing article: {article.get('url', 'No URL')}")
         history_items.append({
             "id": f"source_{len(history_items)}",
             "type": "source",
             "content": article["url"],
-            "timestamp": article.get("publish_date", "2024-01-28T10:00:00Z"),
+            "timestamp": article.get("publish_date", article.get("upload_time", datetime.now().isoformat())),
             "details": {
                 "title": article.get("title", f"Content from {article['url']}"),
                 "summary": article.get("summary", ""),
@@ -1095,6 +1145,7 @@ async def get_history():
     
     # Add actual thesis uploads
     for thesis in thesis_uploads:
+        print(f"   📝 Processing thesis: {thesis.get('filename', 'No filename')}")
         history_items.append({
             "id": thesis["id"],
             "type": "thesis",
@@ -1112,6 +1163,7 @@ async def get_history():
     history_items.sort(key=lambda x: x["timestamp"], reverse=True)
     
     print(f"📚 Returning {len(history_items)} history items")
+    print(f"📚 History items structure: {[item.get('type') for item in history_items]}")
     return history_items
 
 @app.get("/api/history/sources")
@@ -1200,6 +1252,46 @@ async def test_history():
             }
         }
     ]
+
+@app.post("/api/test/populate")
+async def populate_test_data():
+    """Populate test data for debugging"""
+    global articles, thesis_uploads
+    
+    # Add a test article
+    test_article = {
+        "url": "https://example.com/test-article",
+        "title": "Test Article for Debugging",
+        "summary": "This is a test article to help debug the history functionality.",
+        "keywords": ["test", "debug", "history", "content"],
+        "companies": ["Test Company Inc", "Debug Corp"],
+        "embedding": [0.1, 0.2, 0.3],
+        "publish_date": datetime.now().isoformat(),
+        "authors": ["Test Author"],
+        "scraping_allowed": True,
+        "warning": None,
+        "upload_time": datetime.now().isoformat()
+    }
+    articles.append(test_article)
+    
+    # Add a test thesis
+    test_thesis = {
+        "id": "thesis_test_1",
+        "filename": "test-thesis.txt",
+        "file_type": ".txt",
+        "content_length": 500,
+        "upload_time": datetime.now().isoformat(),
+        "summary": "Test thesis for debugging history functionality"
+    }
+    thesis_uploads.append(test_thesis)
+    
+    print(f"🧪 Test data populated: {len(articles)} articles, {len(thesis_uploads)} thesis uploads")
+    
+    return {
+        "message": "Test data populated successfully",
+        "articles_count": len(articles),
+        "thesis_count": len(thesis_uploads)
+    }
 
 # Serve frontend static files
 @app.get("/")
