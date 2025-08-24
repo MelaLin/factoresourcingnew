@@ -3,10 +3,11 @@ services:
   - type: web
     name: factoresourcing-backend
     env: python
-    plan: free
+    plan: starter
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: python -m uvicorn main:app --host 0.0.0.0 --port $PORT
+    autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.16
@@ -17,10 +18,8 @@ services:
       #   value: your-openai-api-key-here
 
   # Frontend Service (Static Site)
-  - type: web
+  - type: static
     name: factoresourcing-frontend
-    env: static
-    plan: free
     rootDir: frontend
     buildCommand: npm install && npm run build
     staticPublishPath: ./dist
