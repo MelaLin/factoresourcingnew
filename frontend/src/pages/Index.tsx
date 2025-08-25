@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
 import { SourceInput } from '@/components/SourceInput';
-import { ThesisUpload } from '@/components/ThesisUpload';
 import { ThesisTextInput } from '@/components/ThesisTextInput';
 import { ContentMatchView } from '@/components/ContentMatchView';
 import { BlogUpload } from '@/components/BlogUpload';
@@ -20,7 +19,6 @@ const initialMatchedContent: any[] = [];
 
 const Index = () => {
   const [sources, setSources] = useState<string[]>([]);
-  const [thesisFile, setThesisFile] = useState<File | null>(null);
   const [thesisText, setThesisText] = useState<string>('');
   const [isLoadingSource, setIsLoadingSource] = useState(false);
   const [isLoadingThesis, setIsLoadingThesis] = useState(false);
@@ -112,40 +110,7 @@ const Index = () => {
     }
   };
 
-  const handleUploadThesis = async (file: File, title: string) => {
-    setIsLoadingThesis(true);
-    
-    try {
-      console.log('Attempting to upload thesis:', file.name);
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('title', title);
-      
-      const response = await fetch(`${API_BASE_URL}/api/thesis/upload`, {
-        method: 'POST',
-        body: formData
-      });
-      
-      console.log('Thesis upload response status:', response.status);
-      
-      if (response.ok) {
-        setThesisFile(file);
-        setThesisText(''); // Clear text input if file uploaded
-        console.log('Thesis uploaded successfully:', file.name);
-        // Trigger content matching after thesis upload
-        await fetchMatches();
-      } else {
-        const errorData = await response.text();
-        console.error('Thesis upload error response:', errorData);
-        throw new Error(`Failed to upload thesis: ${response.status} - ${errorData}`);
-      }
-    } catch (error) {
-      console.error('Error uploading thesis:', error);
-      // You can add toast notification here for error handling
-    } finally {
-      setIsLoadingThesis(false);
-    }
-  };
+
 
   const handleSubmitThesis = async (text: string, title: string) => {
     setIsLoadingThesis(true);
@@ -170,7 +135,6 @@ const Index = () => {
       
       if (response.ok) {
         setThesisText(text);
-        setThesisFile(null); // Clear file upload if text submitted
         console.log('Thesis text submitted successfully');
         // Trigger content matching after thesis submission
         await fetchMatches();
@@ -298,31 +262,15 @@ const Index = () => {
                 />
               </div>
 
-              {/* Thesis Input Options */}
+              {/* Thesis Input */}
               <div className="space-y-4">
-                <Tabs defaultValue="upload" className="w-full">
-                  <TabsList className="grid w-full grid-cols-2">
-                    <TabsTrigger value="upload">Upload File</TabsTrigger>
-                    <TabsTrigger value="paste">Paste Text</TabsTrigger>
-                  </TabsList>
-                  
-                  <TabsContent value="upload" className="mt-4">
-                    <ThesisUpload 
-                      onUploadThesis={handleUploadThesis}
-                      isLoading={isLoadingThesis}
-                    />
-                  </TabsContent>
-                  
-                  <TabsContent value="paste" className="mt-4">
-                    <ThesisTextInput 
-                      onSubmitThesis={handleSubmitThesis}
-                      isLoading={isLoadingThesis}
-                    />
-                  </TabsContent>
-                </Tabs>
+                <ThesisTextInput 
+                  onSubmitThesis={handleSubmitThesis}
+                  isLoading={isLoadingThesis}
+                />
                 
                 {/* Thesis Status */}
-                {(thesisFile || thesisText) && (
+                {thesisText && (
                   <Card>
                     <CardHeader>
                       <CardTitle className="text-lg">Thesis Status</CardTitle>
@@ -331,21 +279,10 @@ const Index = () => {
                       <div className="flex items-center gap-3">
                         <div className="w-3 h-3 bg-success rounded-full"></div>
                         <div>
-                          {thesisFile ? (
-                            <>
-                              <p className="font-medium text-sm">{thesisFile.name}</p>
-                              <p className="text-xs text-muted-foreground">
-                                File uploaded - Ready for content matching
-                              </p>
-                            </>
-                          ) : (
-                            <>
-                              <p className="font-medium text-sm">Thesis text submitted</p>
-                              <p className="text-xs text-muted-foreground">
-                                Text processed - Ready for content matching ({thesisText.length} characters)
-                              </p>
-                            </>
-                          )}
+                          <p className="font-medium text-sm">Thesis text submitted</p>
+                          <p className="text-xs text-muted-foreground">
+                            Text processed - Ready for content matching ({thesisText.length} characters)
+                          </p>
                         </div>
                       </div>
                     </CardContent>
