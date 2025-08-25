@@ -17,6 +17,14 @@ interface MatchedContent {
   matchedKeywords: string[];
   companies: string[];
   thesisAlignment: string;
+  detailedScores?: {
+    thesis_alignment?: number;
+    vector_similarity?: number;
+    keyword_overlap?: number;
+    semantic_similarity?: number;
+    content_quality?: number;
+  };
+  matchedThesisPoints?: string[];
 }
 
 interface ContentMatchViewProps {
@@ -189,6 +197,35 @@ export const ContentMatchView = ({ matchedContent, isLoading = false }: ContentM
                       // Single metric
                       <div className="text-sm text-foreground/80">
                         {content.thesisAlignment}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+              
+              {/* Enhanced Thesis Alignment Details */}
+              {content.detailedScores && content.detailedScores.thesis_alignment && (
+                <div className="bg-green-50 border border-green-200 rounded-lg p-3">
+                  <h4 className="text-sm font-semibold text-green-800 mb-2">
+                    AI Thesis Analysis
+                  </h4>
+                  <div className="space-y-2">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-green-700">Alignment Score:</span>
+                      <Badge className="bg-green-600 text-white text-xs">
+                        {Math.round(content.detailedScores.thesis_alignment * 100)}%
+                      </Badge>
+                    </div>
+                    {content.matchedThesisPoints && content.matchedThesisPoints.length > 0 && (
+                      <div>
+                        <span className="text-xs text-green-700 font-medium">Matched Points:</span>
+                        <div className="mt-1 space-y-1">
+                          {content.matchedThesisPoints.map((point, index) => (
+                            <div key={index} className="text-xs text-green-600 bg-green-100 rounded px-2 py-1">
+                              {point}
+                            </div>
+                          ))}
+                        </div>
                       </div>
                     )}
                   </div>

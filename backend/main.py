@@ -138,7 +138,9 @@ def real_scrape_url(url: str) -> dict:
         # Extract main content (try multiple selectors)
         content_selectors = [
             'article', 'main', '.content', '.post-content', '.entry-content', 
-            '.article-content', '.story-content', '.post-body', '.entry-body'
+            '.article-content', '.story-content', '.post-body', '.entry-body',
+            '.post', '.story', '.article', '.entry', '.content-area',
+            '[role="main"]', '.main-content', '.story-body', '.article-body'
         ]
         
         main_content = None
@@ -152,13 +154,24 @@ def real_scrape_url(url: str) -> dict:
             main_content = soup.find('body')
         
         if main_content:
-            # Clean and extract text
-            for tag in main_content(['script', 'style', 'nav', 'header', 'footer', 'aside']):
+            # Clean and extract text - enhanced for news articles
+            for tag in main_content(['script', 'style', 'nav', 'header', 'footer', 'aside', 
+                                   '.advertisement', '.ads', '.social-share', '.related-posts',
+                                   '.newsletter-signup', '.comments', '.author-bio']):
                 tag.decompose()
             
-            text_content = main_content.get_text(separator=' ', strip=True)
-            # Clean up whitespace
-            text_content = re.sub(r'\s+', ' ', text_content).strip()
+            # Extract text with better structure
+            text_content = main_content.get_text(separator='\n', strip=True)
+            
+            # Clean up whitespace and improve readability
+            text_content = re.sub(r'\n\s*\n', '\n\n', text_content)  # Remove excessive line breaks
+            text_content = re.sub(r'\s+', ' ', text_content)  # Clean up whitespace
+            text_content = re.sub(r'^\s+|\s+$', '', text_content, flags=re.MULTILINE)  # Trim lines
+            
+            # Remove common news site artifacts
+            text_content = re.sub(r'Share this article|Follow us|Subscribe|Newsletter|Related articles', '', text_content, flags=re.IGNORECASE)
+            
+            text_content = text_content.strip()
         else:
             text_content = "Content could not be extracted from this page."
         

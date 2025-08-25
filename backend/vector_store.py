@@ -1,6 +1,6 @@
 import faiss
 import numpy as np
-from ai_utils import embed_text, parse_thesis, calculate_semantic_similarity
+from ai_utils import embed_text, parse_thesis, calculate_semantic_similarity, analyze_thesis_alignment
 
 DIM = 1536
 index = faiss.IndexFlatL2(DIM)
@@ -52,27 +52,28 @@ def find_relevant_articles(articles):
     print(f"🔍 Finding relevant articles from {len(articles)} articles")
     print(f"📚 Thesis has {len(thesis_embeddings)} embeddings and {len(thesis_keywords)} keywords")
     
-    # If no thesis embeddings exist, return articles with default scores
-    if len(thesis_embeddings) == 0:
-        print("⚠️  No thesis uploaded yet, returning default matches")
-        for article in articles:
-            matches.append({
-                "url": article["url"],
-                "title": article.get("title", f"Content from {article['url']}"),
-                "summary": article["summary"],
-                "keywords": article["keywords"],
-                "companies": article.get("companies", []),
-                "matched_thesis_points": ["No thesis uploaded yet"],
-                "relevance_score": 1.0,
-                "match_reason": "No thesis available for comparison",
-                "detailed_scores": {
-                    "vector_similarity": 0.0,
-                    "keyword_overlap": 0.0,
-                    "semantic_similarity": 0.0,
-                    "content_quality": 0.0
-                }
-            })
-        return sorted(matches, key=lambda x: x["relevance_score"], reverse=True)
+            # If no thesis embeddings exist, return articles with default scores
+        if len(thesis_embeddings) == 0:
+            print("⚠️  No thesis uploaded yet, returning default matches")
+            for article in articles:
+                matches.append({
+                    "url": article["url"],
+                    "title": article.get("title", f"Content from {article['url']}"),
+                    "summary": article["summary"],
+                    "full_content": article.get("full_content", "Full content not available"),
+                    "keywords": article["keywords"],
+                    "companies": article.get("companies", []),
+                    "matched_thesis_points": ["No thesis uploaded yet"],
+                    "relevance_score": 1.0,
+                    "match_reason": "No thesis available for comparison",
+                    "detailed_scores": {
+                        "vector_similarity": 0.0,
+                        "keyword_overlap": 0.0,
+                        "semantic_similarity": 0.0,
+                        "content_quality": 0.0
+                    }
+                })
+            return sorted(matches, key=lambda x: x["relevance_score"], reverse=True)
     
     for i, article in enumerate(articles):
         print(f"📄 Processing article {i+1}/{len(articles)}: {article.get('title', 'Unknown')}")
@@ -141,6 +142,33 @@ def find_relevant_articles(articles):
             match_reasons.append(f"Content quality: {content_score:.2f}")
         detailed_scores["content_quality"] = content_score
         
+        # Strategy 5: Enhanced thesis alignment analysis
+        if thesis_points and thesis_keywords:
+            try:
+                alignment_analysis = analyze_thesis_alignment(
+                    article.get('full_content', article.get('summary', '')),
+                    thesis_points,
+                    thesis_keywords
+                )
+                
+                # Add alignment score to match scores
+                alignment_score = alignment_analysis.get('overall_score', 0.0)
+                match_scores.append(alignment_score * 0.3)  # 30% weight for thesis alignment
+                detailed_scores["thesis_alignment"] = alignment_score
+                
+                # Update matched points with AI analysis
+                if alignment_analysis.get('matched_points'):
+                    matched_points = alignment_analysis['matched_points']
+                
+                # Add alignment reasons to match reasons
+                if alignment_analysis.get('alignment_reasons'):
+                    match_reasons.extend(alignment_analysis['alignment_reasons'])
+                
+                print(f"   🎯 Thesis alignment score: {alignment_score:.2f}")
+                
+            except Exception as e:
+                print(f"   ❌ Thesis alignment analysis failed: {e}")
+        
         # Calculate final relevance score
         final_score = sum(match_scores) if match_scores else 0.0
         
@@ -149,6 +177,7 @@ def find_relevant_articles(articles):
             "url": article["url"],
             "title": article.get("title", f"Content from {article['url']}"),
             "summary": article["summary"],
+            "full_content": article.get("full_content", "Full content not available"),
             "keywords": article["keywords"],
             "companies": article.get("companies", []),
             "matched_thesis_points": matched_points[:3],  # Top 3 matched points

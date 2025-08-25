@@ -31,16 +31,17 @@ def summarize_text(text):
     
     try:
         prompt = f"""
-        Create a clear, accurate summary of the following text. Focus on:
-        - Main topic and key findings
-        - Important data, numbers, or statistics mentioned
-        - Key companies, technologies, or innovations discussed
-        - Main conclusions or implications
+        Create a comprehensive, business-focused summary of the following text. Focus on:
+        - Main business development or announcement
+        - Key financial figures, investments, or deal values
+        - Companies, technologies, and market implications
+        - Strategic significance and industry impact
+        - Timeline and expected outcomes
         
         Text to summarize:
-        {text[:3000]}
+        {text[:4000]}
         
-        Provide a concise summary in 2-3 sentences that captures the essential information accurately.
+        Provide a detailed summary in 3-4 sentences that captures the business significance and key details.
         """
         
         response = openai.chat.completions.create(
@@ -152,11 +153,12 @@ def extract_companies(text, max_companies=10):
         - DO NOT include generic business terms like "Energy", "Solutions", "Industries", "Green" alone
         - DO NOT include single words that are common business terms
         - Focus on recognizable brand names, startups, and established companies
+        - Include parent companies and subsidiaries when mentioned
         - If unsure, exclude rather than include
         - Return company names as they appear in the text (with proper capitalization)
         
         Text to analyze:
-        {text[:3000]}
+        {text[:4000]}
         
         Return a JSON array of company names only, no explanations.
         """
@@ -405,6 +407,104 @@ def extract_keywords_from_text(text, max_keywords=8):
     except Exception as e:
         print(f"Error extracting keywords: {e}")
         return ["content", "article", "information"]
+
+def analyze_thesis_alignment(article_text: str, thesis_points: list, thesis_keywords: list) -> dict:
+    """Analyze how well an article aligns with the user's thesis"""
+    # Check if OpenAI API key is available
+    if not openai.api_key:
+        # Fallback analysis using text similarity
+        alignment_score = 0.0
+        matched_points = []
+        alignment_reasons = []
+        
+        # Simple keyword matching
+        article_lower = article_text.lower()
+        thesis_lower = ' '.join(thesis_keywords).lower()
+        
+        # Count keyword matches
+        keyword_matches = sum(1 for keyword in thesis_keywords if keyword.lower() in article_lower)
+        if thesis_keywords:
+            keyword_score = keyword_matches / len(thesis_keywords)
+            alignment_score += keyword_score * 0.4
+        
+        # Simple point matching
+        for point in thesis_points:
+            point_lower = point.lower()
+            if any(word in article_lower for word in point_lower.split() if len(word) > 3):
+                matched_points.append(point)
+                alignment_score += 0.2
+        
+        return {
+            "overall_score": min(alignment_score, 1.0),
+            "matched_points": matched_points,
+            "alignment_reasons": [f"Keyword match: {keyword_matches}/{len(thesis_keywords)}", f"Point matches: {len(matched_points)}"],
+            "analysis_type": "fallback_text_analysis"
+        }
+    
+    try:
+        prompt = f"""
+        Analyze how well this article aligns with the user's investment thesis.
+        
+        USER'S THESIS POINTS:
+        {chr(10).join([f"- {point}" for point in thesis_points])}
+        
+        USER'S KEYWORDS:
+        {', '.join(thesis_keywords)}
+        
+        ARTICLE TEXT:
+        {article_text[:3000]}
+        
+        Provide a detailed analysis in the following JSON format:
+        {{
+            "overall_score": 0.85,
+            "matched_points": ["Point 1", "Point 2"],
+            "alignment_reasons": [
+                "Strong alignment with renewable energy focus",
+                "Direct mention of AI data centers",
+                "Investment scale matches thesis criteria"
+            ],
+            "key_insights": "Brief explanation of why this article is relevant",
+            "investment_implications": "What this means for the investment thesis"
+        }}
+        
+        Score from 0.0 (no alignment) to 1.0 (perfect alignment).
+        """
+        
+        response = openai.chat.completions.create(
+            model="gpt-4",
+            messages=[
+                {"role": "system", "content": "You are an expert investment analyst who evaluates content relevance to investment theses. Provide accurate, detailed analysis."},
+                {"role": "user", "content": prompt}
+            ],
+            max_tokens=500,
+            temperature=0.1
+        )
+        
+        content = response.choices[0].message.content.strip()
+        
+        try:
+            # Try to parse JSON response
+            import json
+            analysis = json.loads(content)
+            return analysis
+        except json.JSONDecodeError:
+            # Fallback parsing
+            return {
+                "overall_score": 0.7,
+                "matched_points": thesis_points[:2] if thesis_points else [],
+                "alignment_reasons": ["AI analysis completed but parsing failed"],
+                "analysis_type": "ai_analysis_parsing_failed"
+            }
+            
+    except Exception as e:
+        print(f"Error analyzing thesis alignment: {e}")
+        # Fallback analysis
+        return {
+            "overall_score": 0.5,
+            "matched_points": [],
+            "alignment_reasons": [f"Analysis failed: {str(e)}"],
+            "analysis_type": "error_fallback"
+        }
 
 def extract_keywords_from_summary(summary, max_keywords=8):
     """Extract relevant keywords from a summary"""
