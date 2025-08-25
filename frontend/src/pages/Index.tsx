@@ -112,13 +112,14 @@ const Index = () => {
     }
   };
 
-  const handleUploadThesis = async (file: File) => {
+  const handleUploadThesis = async (file: File, title: string) => {
     setIsLoadingThesis(true);
     
     try {
       console.log('Attempting to upload thesis:', file.name);
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('title', title);
       
       const response = await fetch(`${API_BASE_URL}/api/thesis/upload`, {
         method: 'POST',
@@ -146,7 +147,7 @@ const Index = () => {
     }
   };
 
-  const handleSubmitThesis = async (text: string) => {
+  const handleSubmitThesis = async (text: string, title: string) => {
     setIsLoadingThesis(true);
     
     try {
@@ -158,6 +159,7 @@ const Index = () => {
       
       const formData = new FormData();
       formData.append('file', file);
+      formData.append('title', title);
       
       const response = await fetch(`${API_BASE_URL}/api/thesis/upload`, {
         method: 'POST',

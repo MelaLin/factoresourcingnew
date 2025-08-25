@@ -7,15 +7,25 @@ import { useToast } from '@/hooks/use-toast';
 import { FileText, Send } from 'lucide-react';
 
 interface ThesisTextInputProps {
-  onSubmitThesis: (text: string) => void;
+  onSubmitThesis: (text: string, title: string) => void;
   isLoading?: boolean;
 }
 
 export const ThesisTextInput = ({ onSubmitThesis, isLoading = false }: ThesisTextInputProps) => {
   const [thesisText, setThesisText] = useState('');
+  const [thesisTitle, setThesisTitle] = useState('');
   const { toast } = useToast();
 
   const handleSubmit = () => {
+    if (!thesisTitle.trim()) {
+      toast({
+        title: "Title Required",
+        description: "Please enter a title for your thesis",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!thesisText.trim()) {
       toast({
         title: "No Thesis Text",
@@ -34,7 +44,7 @@ export const ThesisTextInput = ({ onSubmitThesis, isLoading = false }: ThesisTex
       return;
     }
 
-    onSubmitThesis(thesisText.trim());
+    onSubmitThesis(thesisText.trim(), thesisTitle.trim());
     
     toast({
       title: "Thesis Submitted",
@@ -44,6 +54,7 @@ export const ThesisTextInput = ({ onSubmitThesis, isLoading = false }: ThesisTex
 
   const clearText = () => {
     setThesisText('');
+    setThesisTitle('');
   };
 
   return (
@@ -55,6 +66,21 @@ export const ThesisTextInput = ({ onSubmitThesis, isLoading = false }: ThesisTex
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-4">
+        {/* Thesis Title Input */}
+        <div className="space-y-2">
+          <Label htmlFor="thesis-title" className="text-sm font-medium">
+            Thesis Title
+          </Label>
+          <input
+            id="thesis-title"
+            type="text"
+            value={thesisTitle}
+            onChange={(e) => setThesisTitle(e.target.value)}
+            placeholder="Enter a descriptive title for your thesis..."
+            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary transition-all duration-200"
+          />
+        </div>
+
         <div className="space-y-2">
           <Label htmlFor="thesis-text" className="text-sm font-medium">
             Company Investment Thesis

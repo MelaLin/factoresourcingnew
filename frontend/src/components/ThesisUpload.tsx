@@ -6,12 +6,13 @@ import { useToast } from '@/hooks/use-toast';
 import { Upload, FileText, X } from 'lucide-react';
 
 interface ThesisUploadProps {
-  onUploadThesis: (file: File) => void;
+  onUploadThesis: (file: File, title: string) => void;
   isLoading?: boolean;
 }
 
 export const ThesisUpload = ({ onUploadThesis, isLoading = false }: ThesisUploadProps) => {
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [thesisTitle, setThesisTitle] = useState<string>('');
   const [dragActive, setDragActive] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
@@ -74,7 +75,16 @@ export const ThesisUpload = ({ onUploadThesis, isLoading = false }: ThesisUpload
       return;
     }
 
-    onUploadThesis(selectedFile);
+    if (!thesisTitle.trim()) {
+      toast({
+        title: "Title Required",
+        description: "Please enter a title for your thesis",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    onUploadThesis(selectedFile, thesisTitle.trim());
     
     toast({
       title: "Thesis Uploaded",
@@ -84,6 +94,7 @@ export const ThesisUpload = ({ onUploadThesis, isLoading = false }: ThesisUpload
 
   const clearFile = () => {
     setSelectedFile(null);
+    setThesisTitle('');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -160,6 +171,21 @@ export const ThesisUpload = ({ onUploadThesis, isLoading = false }: ThesisUpload
               </p>
             </div>
           )}
+        </div>
+
+        {/* Thesis Title Input */}
+        <div className="space-y-2">
+          <Label htmlFor="thesis-title" className="text-sm font-medium">
+            Thesis Title
+          </Label>
+          <input
+            id="thesis-title"
+            type="text"
+            value={thesisTitle}
+            onChange={(e) => setThesisTitle(e.target.value)}
+            placeholder="Enter a descriptive title for your thesis..."
+            className="w-full px-3 py-2 border border-border rounded-md bg-background text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-secondary/20 focus:border-secondary transition-all duration-200"
+          />
         </div>
 
         <Button

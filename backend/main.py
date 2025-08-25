@@ -1,4 +1,4 @@
-from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
@@ -451,7 +451,10 @@ async def add_source(request: SourceRequest):
         raise HTTPException(status_code=500, detail=f"Error processing source: {str(e)}")
 
 @app.post("/api/thesis/upload")
-async def upload_thesis(file: UploadFile = File(...)):
+async def upload_thesis(
+    file: UploadFile = File(...),
+    title: str = Form(...)
+):
     """Upload thesis file (PDF, Word, or text)"""
     try:
         # Create temporary file to parse
@@ -478,9 +481,11 @@ async def upload_thesis(file: UploadFile = File(...)):
             thesis_info = {
                 "id": f"thesis_{len(thesis_uploads) + 1}",
                 "filename": file.filename,
+                "title": title,
                 "file_type": os.path.splitext(file.filename)[1],
                 "content_length": len(text),
                 "upload_time": datetime.now().isoformat(),
+                "content": text,  # Store the actual content
                 "summary": f"Processed {len(text)} characters from {file.filename}"
             }
             thesis_uploads.append(thesis_info)
@@ -507,6 +512,34 @@ async def upload_thesis(file: UploadFile = File(...)):
     except Exception as e:
         print(f"❌ Error uploading thesis: {e}")
         raise HTTPException(status_code=500, detail=f"Error uploading thesis: {str(e)}")
+
+@app.put("/api/thesis/update/{thesis_id}")
+async def update_thesis(thesis_id: str, request: dict):
+    """Update thesis title and content"""
+    try:
+        # Find the thesis in our storage
+        thesis_index = None
+        for i, thesis in enumerate(thesis_uploads):
+            if thesis["id"] == thesis_id:
+                thesis_index = i
+                break
+        
+        if thesis_index is None:
+            raise HTTPException(status_code=404, detail="Thesis not found")
+        
+        # Update the thesis
+        thesis_uploads[thesis_index].update({
+            "title": request.get("title", thesis_uploads[thesis_index]["filename"]),
+            "content": request.get("content", ""),
+            "has_changes": True
+        })
+        
+        print(f"✅ Thesis updated: {thesis_id}")
+        return {"message": "Thesis updated successfully"}
+        
+    except Exception as e:
+        print(f"❌ Error updating thesis: {e}")
+        raise HTTPException(status_code=500, detail=f"Error updating thesis: {str(e)}")
 
 @app.post("/api/blog/upload", response_model=BlogUploadResponse)
 async def upload_blog(request: BlogUploadRequest):
