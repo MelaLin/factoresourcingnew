@@ -1,7 +1,9 @@
+import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { ExternalLink, Calendar, TrendingUp, Tag, Building2 } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { ExternalLink, Calendar, TrendingUp, Tag, Building2, FileText, X } from 'lucide-react';
 
 interface MatchedContent {
   id: string;
@@ -10,6 +12,7 @@ interface MatchedContent {
   source: string;
   publishDate: string;
   summary: string;
+  fullContent: string;  // Add full content
   relevanceScore: number;
   matchedKeywords: string[];
   companies: string[];
@@ -22,6 +25,19 @@ interface ContentMatchViewProps {
 }
 
 export const ContentMatchView = ({ matchedContent, isLoading = false }: ContentMatchViewProps) => {
+  const [selectedArticle, setSelectedArticle] = useState<MatchedContent | null>(null);
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  const openArticleModal = (article: MatchedContent) => {
+    setSelectedArticle(article);
+    setIsModalOpen(true);
+  };
+
+  const closeArticleModal = () => {
+    setIsModalOpen(false);
+    setSelectedArticle(null);
+  };
+
   if (isLoading) {
     return (
       <div className="space-y-4">
@@ -97,6 +113,14 @@ export const ContentMatchView = ({ matchedContent, isLoading = false }: ContentM
                   <Badge className={getRelevanceColor(content.relevanceScore)}>
                     {content.relevanceScore}% match
                   </Badge>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => openArticleModal(content)}
+                    className="hover:bg-primary/10"
+                  >
+                    <FileText className="h-4 w-4" />
+                  </Button>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -194,6 +218,81 @@ export const ContentMatchView = ({ matchedContent, isLoading = false }: ContentM
           </Card>
         ))}
       </div>
+
+      {/* Article Content Modal */}
+      <Dialog open={isModalOpen} onOpenChange={setIsModalOpen}>
+        <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <div className="flex items-center justify-between">
+              <DialogTitle className="text-xl font-bold">
+                {selectedArticle?.title}
+              </DialogTitle>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={closeArticleModal}
+                className="h-8 w-8 p-0"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <span className="font-medium">{selectedArticle?.source}</span>
+              <div className="flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
+                {selectedArticle?.publishDate && new Date(selectedArticle.publishDate).toLocaleDateString()}
+              </div>
+            </div>
+          </DialogHeader>
+          
+          <div className="space-y-6">
+            {/* Summary */}
+            <div className="bg-muted/30 rounded-lg p-4">
+              <h3 className="font-semibold mb-2 text-sm">Summary</h3>
+              <p className="text-sm text-foreground/80">{selectedArticle?.summary}</p>
+            </div>
+
+            {/* Full Content */}
+            <div>
+              <h3 className="font-semibold mb-3 text-sm">Full Article Content</h3>
+              <div className="bg-background border rounded-lg p-4 max-h-96 overflow-y-auto">
+                <div className="whitespace-pre-wrap text-sm leading-relaxed">
+                  {selectedArticle?.fullContent || "Full content not available"}
+                </div>
+              </div>
+            </div>
+
+            {/* Keywords and Companies */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {selectedArticle?.matchedKeywords && selectedArticle.matchedKeywords.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2 text-sm">Keywords</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedArticle.matchedKeywords.map((keyword, index) => (
+                      <Badge key={index} variant="secondary" className="text-xs">
+                        {keyword}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {selectedArticle?.companies && selectedArticle.companies.length > 0 && (
+                <div>
+                  <h3 className="font-semibold mb-2 text-sm">Companies</h3>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedArticle.companies.map((company, index) => (
+                      <Badge key={index} variant="outline" className="text-xs">
+                        {company}
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

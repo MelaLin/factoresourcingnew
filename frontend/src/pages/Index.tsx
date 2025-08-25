@@ -59,6 +59,7 @@ const Index = () => {
           source: new URL(match.url).hostname,
           publishDate: new Date().toISOString().split('T')[0],
           summary: match.summary,
+          fullContent: match.full_content || "Full content not available",
           relevanceScore: Math.round(match.relevance_score * 100),
           matchedKeywords: match.keywords || [],
           companies: match.companies || [],
@@ -336,7 +337,21 @@ const Index = () => {
                           if (response.ok) {
                             const data = await response.json();
                             if (data.matches && data.matches.length > 0) {
-                              setMatchedContent(data.matches);
+                              // Transform starred matches to include full content
+                              const transformedStarredMatches = data.matches.map((match: any, index: number) => ({
+                                id: String(index + 1),
+                                title: match.title || `Content from ${new URL(match.url).hostname}`,
+                                url: match.url,
+                                source: new URL(match.url).hostname,
+                                publishDate: new Date().toISOString().split('T')[0],
+                                summary: match.summary,
+                                fullContent: match.full_content || "Full content not available",
+                                relevanceScore: Math.round(match.relevance_score * 100),
+                                matchedKeywords: match.keywords || [],
+                                companies: match.companies || [],
+                                thesisAlignment: match.match_reason || 'No alignment information available'
+                              }));
+                              setMatchedContent(transformedStarredMatches);
                               alert(`Found ${data.matches.length} matches from starred blogs!`);
                             } else {
                               alert('No matches found from starred blogs. Try uploading a thesis first.');

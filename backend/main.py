@@ -358,6 +358,7 @@ class MatchResponse(BaseModel):
     url: str
     title: str
     summary: str
+    full_content: str  # Add full article content
     keywords: List[str]
     companies: List[str]
     relevance_score: float
@@ -437,6 +438,7 @@ async def add_source(request: SourceRequest):
             "url": request.url,
             "title": scraped_data["title"],
             "summary": summary,
+            "full_content": scraped_data["text"],  # Store full content
             "keywords": keywords,
             "companies": scraped_data["companies"],
             "embedding": embedding,
@@ -621,6 +623,7 @@ async def upload_blog(request: BlogUploadRequest):
                     "url": article_url,
                     "title": scraped_data["title"] or f"Article {i+1} from {request.url}",
                     "summary": summary,
+                    "full_content": scraped_data["text"],  # Store full article content
                     "keywords": keywords,
                     "companies": companies,
                     "embedding": embedding,
@@ -751,6 +754,7 @@ async def get_matches():
                 url=match["url"],
                 title=match.get("title", f"Content from {match['url']}"),
                 summary=match["summary"],
+                full_content=match.get("full_content", "Full content not available"),
                 keywords=match["keywords"],
                 companies=match.get("companies", []),
                 relevance_score=match.get("relevance_score", 0.0),
@@ -1017,6 +1021,7 @@ async def search_scholar(request: ScholarSearch):
                     "url": result["url"],
                     "title": result["title"],
                     "summary": summary,
+                    "full_content": result.get("abstract", ""),  # Store full abstract content
                     "keywords": keywords,
                     "companies": companies,
                     "embedding": embedding,
@@ -1084,6 +1089,7 @@ async def search_patents(request: ScholarSearch):
                     "url": result["url"],
                     "title": result["title"],
                     "summary": summary,
+                    "full_content": result.get("abstract", ""),  # Store full patent abstract
                     "keywords": keywords,
                     "companies": companies,
                     "embedding": embedding,
@@ -1176,6 +1182,38 @@ async def health_check_history():
             "articles_count": len(articles) if 'articles' in locals() else "Unknown",
             "thesis_count": len(thesis_uploads) if 'thesis_uploads' in locals() else "Unknown"
         }
+
+@app.get("/api/article/{article_id}")
+async def get_article_content(article_id: str):
+    """Get full article content by ID"""
+    try:
+        # Parse article ID (format: source_X where X is the index)
+        if article_id.startswith("source_"):
+            index = int(article_id.replace("source_", ""))
+            if 0 <= index < len(articles):
+                article = articles[index]
+                return {
+                    "url": article["url"],
+                    "title": article.get("title", "No Title"),
+                    "full_content": article.get("full_content", "Full content not available"),
+                    "summary": article.get("summary", "No summary available"),
+                    "keywords": article.get("keywords", []),
+                    "companies": article.get("companies", []),
+                    "publish_date": article.get("publish_date", "Unknown"),
+                    "authors": article.get("authors", ["Unknown Author"]),
+                    "source": article.get("source_blog", "Individual source"),
+                    "upload_time": article.get("upload_time", "Unknown")
+                }
+            else:
+                raise HTTPException(status_code=404, detail="Article not found")
+        else:
+            raise HTTPException(status_code=400, detail="Invalid article ID format")
+            
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid article ID")
+    except Exception as e:
+        print(f"Error getting article content: {e}")
+        raise HTTPException(status_code=500, detail=f"Error retrieving article: {str(e)}")
 
 @app.get("/api/")
 async def api_info():
