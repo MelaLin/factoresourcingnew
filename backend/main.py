@@ -302,6 +302,15 @@ def parse_file(file_path: str) -> str:
 
 app = FastAPI(title="FactorESourcing API", description="Content sourcing and matching API")
 
+# Check OpenAI API key availability
+import os
+if not os.getenv("OPENAI_API_KEY"):
+    print("⚠️  WARNING: OPENAI_API_KEY not set. Running with fallback text processing.")
+    print("📝 Article summaries and keyword extraction will use basic text analysis.")
+    print("🔑 Set OPENAI_API_KEY environment variable for AI-powered features.")
+else:
+    print("✅ OpenAI API key detected. AI-powered features enabled.")
+
 # Add CORS middleware
 app.add_middleware(
     CORSMiddleware,

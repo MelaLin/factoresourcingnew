@@ -9,15 +9,24 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 def summarize_text(text):
     # Check if OpenAI API key is available
     if not openai.api_key:
-        # Simple text-based summary when API is not available
+        # Enhanced text-based summary when API is not available
         words = text.split()
-        if len(words) > 100:
+        
+        # Create a more intelligent summary
+        if len(words) > 200:
+            # Take first 150 words and last 50 words for better context
+            first_part = ' '.join(words[:150])
+            last_part = ' '.join(words[-50:])
+            summary = f"{first_part}... {last_part}"
+        elif len(words) > 100:
             summary = ' '.join(words[:100]) + "..."
         else:
             summary = text
         
         # Extract basic keywords
         keywords = extract_keywords_from_text(text)
+        
+        print(f"📝 Generated fallback summary: {len(summary)} characters")
         return (summary, keywords)
     
     try:
@@ -94,6 +103,44 @@ def extract_companies_from_url(url: str) -> list:
 
 def extract_companies(text, max_companies=10):
     """Extract company names with improved accuracy and filtering"""
+    # Check if OpenAI API key is available
+    if not openai.api_key:
+        # Fallback: simple company extraction when API is not available
+        companies = []
+        words = text.split()
+        
+        # Look for company-like patterns
+        for i, word in enumerate(words):
+            word_clean = word.strip('.,!?;:').strip()
+            if len(word_clean) > 3:
+                # Check for company suffixes
+                if any(suffix in word_clean.lower() for suffix in ['inc', 'corp', 'llc', 'ltd', 'co', 'company']):
+                    companies.append(word_clean)
+                # Check for capitalized words that might be company names
+                elif word_clean[0].isupper() and len(word_clean) > 4:
+                    # Look for adjacent capitalized words (multi-word company names)
+                    if i > 0 and words[i-1][0].isupper():
+                        companies.append(f"{words[i-1]} {word_clean}")
+                    elif i < len(words) - 1 and words[i+1][0].isupper():
+                        companies.append(f"{word_clean} {words[i+1]}")
+                    else:
+                        companies.append(word_clean)
+        
+        # Clean up and filter results
+        cleaned_companies = []
+        for company in companies:
+            # Remove common business words that aren't company names
+            if company.lower() not in ['inc', 'corp', 'llc', 'ltd', 'co', 'company', 'companies']:
+                # Clean up punctuation
+                clean_company = company.strip('.,!?;:').strip()
+                if len(clean_company) > 2:
+                    cleaned_companies.append(clean_company)
+        
+        # Remove duplicates and limit results
+        unique_companies = list(set(cleaned_companies))
+        print(f"🏢 Generated fallback companies: {unique_companies[:max_companies]}")
+        return unique_companies[:max_companies]
+    
     try:
         # Enhanced prompt for better company detection
         prompt = f"""
@@ -361,6 +408,16 @@ def extract_keywords_from_text(text, max_keywords=8):
 
 def extract_keywords_from_summary(summary, max_keywords=8):
     """Extract relevant keywords from a summary"""
+    # Check if OpenAI API key is available
+    if not openai.api_key:
+        # Fallback: simple word extraction when API is not available
+        words = summary.lower().split()
+        # Filter out common words and short words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'}
+        keywords = [word for word in words if len(word) > 3 and word not in stop_words]
+        print(f"🔑 Generated fallback keywords: {keywords[:max_keywords]}")
+        return keywords[:max_keywords]
+    
     try:
         prompt = f"""
         Extract 5-8 most relevant keywords from this summary. Focus on:
