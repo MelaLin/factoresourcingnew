@@ -6,11 +6,10 @@ import { ContentMatchView } from '@/components/ContentMatchView';
 import { BlogUpload } from '@/components/BlogUpload';
 
 import { ScholarPatentsSearch } from '@/components/ScholarPatentsSearch';
-import { History } from '@/components/History';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, FileSearch, Zap, Clock, Star, Globe } from 'lucide-react';
+import { TrendingUp, FileSearch, Zap, Star, Globe } from 'lucide-react';
 
 // API base URL - when served from backend, use relative paths
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -220,11 +219,6 @@ const Index = () => {
               Setup
             </TabsTrigger>
 
-            <TabsTrigger value="history" className="flex items-center gap-2">
-              <Clock className="h-4 w-4" />
-              History
-            </TabsTrigger>
-
             <TabsTrigger value="matches" className="flex items-center gap-2">
               <FileSearch className="h-4 w-4" />
               Matches
@@ -355,10 +349,6 @@ const Index = () => {
                 </p>
               </CardContent>
             </Card>
-          </TabsContent>
-
-          <TabsContent value="history" className="space-y-8">
-            <History />
           </TabsContent>
 
           <TabsContent value="matches">
