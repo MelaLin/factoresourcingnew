@@ -463,6 +463,14 @@ async def add_source(request: SourceRequest):
         }
         articles.append(article)
         
+        # Trigger immediate content matching analysis
+        print("🔄 Triggering content matching analysis after source addition...")
+        try:
+            matches = find_relevant_articles(articles)
+            print(f"   Found {len(matches)} potential matches after adding source")
+        except Exception as e:
+            print(f"   ⚠️  Content matching failed: {e}")
+        
         return SourceResponse(
             url=request.url,
             title=scraped_data["title"],
@@ -1248,17 +1256,27 @@ async def api_info():
 
 @app.get("/api/history")
 async def get_history():
-    """Get simplified history focused on sources"""
+    """Get comprehensive history of ALL content types"""
     print(f"📚 History requested - Current state:")
     print(f"   Articles: {len(articles)}")
     print(f"   Thesis uploads: {len(thesis_uploads)}")
+    print(f"   Blog searches: {len(blog_searches)}")
     
     try:
         history_items = []
         
-        # Add sources (individual articles) - this is what you want to see
+        # Add ALL articles (individual sources, blog articles, scholar results, patents)
         for i, article in enumerate(articles):
             print(f"   📰 Processing article {i+1}: {article.get('url', 'No URL')}")
+            
+            # Determine source type
+            source_type = "individual_source"
+            if article.get("source_blog"):
+                source_type = "blog_article"
+            elif article.get("source") == "Google Scholar":
+                source_type = "scholar_paper"
+            elif article.get("source") == "Google Patents":
+                source_type = "patent_document"
             
             # Check if this source is starred
             is_starred = article.get("is_starred", False)
@@ -1269,23 +1287,40 @@ async def get_history():
                 "url": article["url"],
                 "title": article.get("title", f"Content from {article['url']}"),
                 "summary": article.get("summary", ""),
+                "full_content": article.get("full_content", ""),
                 "keywords": article.get("keywords", []),
                 "companies": article.get("companies", []),
                 "timestamp": article.get("publish_date", article.get("upload_time", datetime.now().isoformat())),
                 "is_starred": is_starred,
-                "source_type": "individual_source"
+                "source_type": source_type,
+                "source_blog": article.get("source_blog", ""),
+                "article_index": article.get("article_index", 0)
             })
         
-        # Add thesis uploads (for reference)
+        # Add thesis uploads
         for thesis in thesis_uploads:
             history_items.append({
                 "id": thesis["id"],
                 "type": "thesis",
-                "title": f"Thesis: {thesis['filename'] or 'Text Input'}",
+                "title": f"Thesis: {thesis.get('title', thesis.get('filename', 'Text Input'))}",
                 "content_length": thesis["content_length"],
                 "timestamp": thesis["upload_time"],
                 "is_starred": False,  # Thesis can't be starred
                 "source_type": "thesis"
+            })
+        
+        # Add blog searches (for tracking blog monitoring)
+        for blog in blog_searches:
+            history_items.append({
+                "id": blog["id"],
+                "type": "blog_search",
+                "url": blog["url"],
+                "title": f"Blog: {blog['url']}",
+                "total_articles": blog["total_articles_found"],
+                "processed_articles": blog["processed_articles"],
+                "timestamp": blog["search_time"],
+                "is_starred": blog.get("is_starred", False),
+                "source_type": "blog_monitoring"
             })
         
         # Sort by timestamp (newest first)
@@ -1300,6 +1335,61 @@ async def get_history():
         print(f"❌ Error in get_history: {e}")
         print(f"❌ Error traceback: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"Error getting history: {str(e)}")
+
+@app.delete("/api/history/{item_id}")
+async def remove_history_item(item_id: str):
+    """Remove an item from history (the 'x' button functionality)"""
+    try:
+        print(f"🗑️  Removing history item: {item_id}")
+        
+        if item_id.startswith("source_"):
+            # Remove article from articles list
+            index = int(item_id.replace("source_", ""))
+            if 0 <= index < len(articles):
+                removed_article = articles.pop(index)
+                print(f"✅ Removed article: {removed_article.get('title', 'Unknown')}")
+                return {"message": "Article removed from history", "removed_id": item_id}
+            else:
+                raise HTTPException(status_code=404, detail="Article not found")
+        
+        elif item_id.startswith("thesis_"):
+            # Remove thesis from thesis_uploads list
+            thesis_index = None
+            for i, thesis in enumerate(thesis_uploads):
+                if thesis["id"] == item_id:
+                    thesis_index = i
+                    break
+            
+            if thesis_index is not None:
+                removed_thesis = thesis_uploads.pop(thesis_index)
+                print(f"✅ Removed thesis: {removed_thesis.get('title', 'Unknown')}")
+                return {"message": "Thesis removed from history", "removed_id": item_id}
+            else:
+                raise HTTPException(status_code=404, detail="Thesis not found")
+        
+        elif item_id.startswith("blog_"):
+            # Remove blog search from blog_searches list
+            blog_index = None
+            for i, blog in enumerate(blog_searches):
+                if blog["id"] == item_id:
+                    blog_index = i
+                    break
+            
+            if blog_index is not None:
+                removed_blog = blog_searches.pop(blog_index)
+                print(f"✅ Removed blog search: {removed_blog.get('url', 'Unknown')}")
+                return {"message": "Blog search removed from history", "removed_id": item_id}
+            else:
+                raise HTTPException(status_code=404, detail="Blog search not found")
+        
+        else:
+            raise HTTPException(status_code=400, detail="Invalid item ID format")
+            
+    except ValueError:
+        raise HTTPException(status_code=400, detail="Invalid item ID")
+    except Exception as e:
+        print(f"Error removing history item: {e}")
+        raise HTTPException(status_code=500, detail=f"Error removing item: {str(e)}")
 
 @app.get("/api/history/sources")
 async def get_sources_history():

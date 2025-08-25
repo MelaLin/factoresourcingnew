@@ -71,46 +71,59 @@ export const Revisions = () => {
       setIsLoading(true);
       setError(null);
       
-      // Fetch blog revisions
-      const blogsResponse = await fetch(`${API_BASE_URL}/api/blogs/starred`);
-      if (blogsResponse.ok) {
-        const blogsData = await blogsResponse.json();
-        const blogs = (blogsData.starred_blogs || []).map((blog: any) => ({
-          ...blog,
-          is_active: true,
-          removed_articles: []
-        }));
+      // Fetch comprehensive history from the new endpoint
+      const historyResponse = await fetch(`${API_BASE_URL}/api/history`);
+      if (historyResponse.ok) {
+        const historyData = await historyResponse.json();
+        console.log('📚 Fetched comprehensive history:', historyData);
+        
+        // Process all content types
+        const blogs: BlogRevision[] = [];
+        const theses: ThesisRevision[] = [];
+        const articlesList: Article[] = [];
+        
+        historyData.forEach((item: any) => {
+          if (item.type === 'blog_search') {
+            blogs.push({
+              id: item.id,
+              url: item.url,
+              search_time: item.timestamp,
+              total_articles_found: item.total_articles || 0,
+              processed_articles: item.processed_articles || 0,
+              is_active: !item.is_starred, // Inactive if starred (removed)
+              removed_articles: []
+            });
+          } else if (item.type === 'thesis') {
+            theses.push({
+              id: item.id,
+              filename: item.title.replace('Thesis: ', ''),
+              content: item.content || '',
+              original_content: item.content || '',
+              upload_time: item.timestamp,
+              file_type: 'text',
+              is_active: true,
+              title: item.title.replace('Thesis: ', ''),
+              has_changes: false
+            });
+          } else if (item.type === 'source') {
+            articlesList.push({
+              id: item.id,
+              url: item.url,
+              title: item.title,
+              summary: item.summary,
+              source_blog: item.source_blog || item.source_type || 'Unknown Source',
+              is_removed: false
+            });
+          }
+        });
+        
         setBlogRevisions(blogs);
-      }
-      
-      // Fetch thesis revisions
-      const thesisResponse = await fetch(`${API_BASE_URL}/api/history/thesis`);
-      if (thesisResponse.ok) {
-        const thesisData = await thesisResponse.json();
-        const theses = (thesisData || []).map((thesis: any) => ({
-          ...thesis,
-          content: thesis.content || thesis.original_content || '',
-          original_content: thesis.content || thesis.original_content || '',
-          is_active: true,
-          title: thesis.filename || 'Untitled Thesis',
-          has_changes: false
-        }));
         setThesisRevisions(theses);
-      }
-      
-      // Fetch articles
-      const articlesResponse = await fetch(`${API_BASE_URL}/api/history/sources`);
-      if (articlesResponse.ok) {
-        const articlesData = await articlesResponse.json();
-        const articlesList = (articlesData || []).map((article: any) => ({
-          id: article.id,
-          url: article.url,
-          title: article.title,
-          summary: article.summary,
-          source_blog: article.source_blog || 'Unknown Source',
-          is_removed: false
-        }));
         setArticles(articlesList);
+        
+        console.log(`📊 Processed: ${blogs.length} blogs, ${theses.length} theses, ${articlesList.length} articles`);
+      } else {
+        throw new Error(`History fetch failed: ${historyResponse.status}`);
       }
       
     } catch (err) {
@@ -180,100 +193,88 @@ export const Revisions = () => {
     setHasUnsavedChanges(false);
   };
 
-  const removeArticle = (articleId: string) => {
-    setArticles(prev => 
-      prev.map(article => 
-        article.id === articleId 
-          ? { ...article, is_removed: true }
-          : article
-      )
-    );
-    setHasUnsavedChanges(true);
+  const removeArticle = async (articleId: string) => {
+    try {
+      // Call backend to remove the article
+      const response = await fetch(`${API_BASE_URL}/api/history/${articleId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        // Remove from local state
+        setArticles(prev => prev.filter(article => article.id !== articleId));
+        setHasUnsavedChanges(true);
+        console.log(`✅ Article ${articleId} removed successfully`);
+      } else {
+        throw new Error('Failed to remove article');
+      }
+    } catch (err) {
+      console.error('❌ Error removing article:', err);
+      setError('Failed to remove article');
+    }
   };
 
-  const restoreArticle = (articleId: string) => {
-    setArticles(prev => 
-      prev.map(article => 
-        article.id === articleId 
-          ? { ...article, is_removed: false }
-          : article
-      )
-    );
-    setHasUnsavedChanges(true);
+  const deactivateBlog = async (blogId: string) => {
+    try {
+      // Call backend to remove the blog
+      const response = await fetch(`${API_BASE_URL}/api/history/${blogId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        // Remove from local state
+        setBlogRevisions(prev => prev.filter(blog => blog.id !== blogId));
+        setHasUnsavedChanges(true);
+        console.log(`✅ Blog ${blogId} removed successfully`);
+      } else {
+        throw new Error('Failed to remove blog');
+      }
+    } catch (err) {
+      console.error('❌ Error removing blog:', err);
+      setError('Failed to remove blog');
+    }
   };
 
-  const deactivateBlog = (blogId: string) => {
-    setBlogRevisions(prev => 
-      prev.map(blog => 
-        blog.id === blogId 
-          ? { ...blog, is_active: false }
-          : blog
-      )
-    );
-    setHasUnsavedChanges(true);
-  };
-
-  const activateBlog = (blogId: string) => {
-    setBlogRevisions(prev => 
-      prev.map(blog => 
-        blog.id === blogId 
-          ? { ...blog, is_active: true }
-          : blog
-      )
-    );
-    setHasUnsavedChanges(true);
-  };
-
-  const deactivateThesis = (thesisId: string) => {
-    setThesisRevisions(prev => 
-      prev.map(thesis => 
-        thesis.id === thesisId 
-          ? { ...thesis, is_active: false }
-          : thesis
-      )
-    );
-    setHasUnsavedChanges(true);
-  };
-
-  const activateThesis = (thesisId: string) => {
-    setThesisRevisions(prev => 
-      prev.map(thesis => 
-        thesis.id === thesisId 
-          ? { ...thesis, is_active: true }
-          : thesis
-      )
-    );
-    setHasUnsavedChanges(true);
+  const deactivateThesis = async (thesisId: string) => {
+    try {
+      // Call backend to remove the thesis
+      const response = await fetch(`${API_BASE_URL}/api/history/${thesisId}`, {
+        method: 'DELETE'
+      });
+      
+      if (response.ok) {
+        // Remove from local state
+        setThesisRevisions(prev => prev.filter(thesis => thesis.id !== thesisId));
+        setHasUnsavedChanges(true);
+        console.log(`✅ Thesis ${thesisId} removed successfully`);
+      } else {
+        throw new Error('Failed to remove thesis');
+      }
+    } catch (err) {
+      console.error('❌ Error removing thesis:', err);
+      setError('Failed to remove thesis');
+    }
   };
 
   const commitRevisions = async () => {
     try {
       setIsLoading(true);
       
-      // Prepare revision data
-      const revisionData = {
-        blogs: blogRevisions.filter(blog => blog.is_active),
-        theses: thesisRevisions.filter(thesis => thesis.is_active),
-        articles: articles.filter(article => !article.is_removed)
-      };
-
-      // Send to backend to update matches
-      const response = await fetch(`${API_BASE_URL}/api/revisions/commit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(revisionData)
-      });
-
-      if (response.ok) {
-        setHasUnsavedChanges(false);
-        // Trigger matches refresh
-        window.dispatchEvent(new CustomEvent('revisionsCommitted', { detail: revisionData }));
-        alert('✅ Revisions committed successfully! Check the Matches tab for updated results.');
-      } else {
-        throw new Error('Failed to commit revisions');
-      }
+      // Since we're now permanently removing items, just refresh matches
+      // The backend already has the updated state
+      console.log('🔄 Committing revisions - refreshing matches...');
+      
+      // Trigger matches refresh by dispatching a custom event
+      window.dispatchEvent(new CustomEvent('revisionsCommitted', { 
+        detail: { 
+          blogs: blogRevisions, 
+          theses: thesisRevisions, 
+          articles: articles 
+        } 
+      }));
+      
+      setHasUnsavedChanges(false);
+      alert('✅ Revisions committed successfully! Check the Matches tab for updated results.');
       
     } catch (err) {
       console.error('❌ Commit error:', err);
@@ -298,9 +299,9 @@ export const Revisions = () => {
   };
 
   const getActiveCount = () => {
-    const activeBlogs = blogRevisions.filter(blog => blog.is_active).length;
-    const activeTheses = thesisRevisions.filter(thesis => thesis.is_active).length;
-    const activeArticles = articles.filter(article => !article.is_removed).length;
+    const activeBlogs = blogRevisions.length;
+    const activeTheses = thesisRevisions.length;
+    const activeArticles = articles.length;
     return { activeBlogs, activeTheses, activeArticles };
   };
 
@@ -435,9 +436,7 @@ export const Revisions = () => {
             </Card>
           ) : (
             blogRevisions.map((blog) => (
-              <Card key={blog.id} className={`transition-all duration-200 hover:shadow-md ${
-                !blog.is_active ? 'opacity-60 bg-muted/30' : ''
-              }`}>
+              <Card key={blog.id} className="transition-all duration-200 hover:shadow-md">
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -446,9 +445,8 @@ export const Revisions = () => {
                         <CardTitle className="text-lg font-semibold line-clamp-2">
                           {blog.url}
                         </CardTitle>
-                        <Badge variant={blog.is_active ? "secondary" : "outline"} 
-                               className={blog.is_active ? "bg-blue-100 text-blue-800" : "bg-gray-100 text-gray-600"}>
-                          {blog.is_active ? 'Active' : 'Inactive'}
+                        <Badge variant="secondary" className="bg-blue-100 text-blue-800">
+                          Active
                         </Badge>
                       </div>
                       
@@ -469,25 +467,14 @@ export const Revisions = () => {
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {blog.is_active ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => deactivateBlog(blog.id)}
-                          className="text-red-600 hover:bg-red-50"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => activateBlog(blog.id)}
-                          className="text-green-600 hover:bg-green-50"
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => deactivateBlog(blog.id)}
+                        className="text-red-600 hover:bg-red-50"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
@@ -512,9 +499,7 @@ export const Revisions = () => {
             </Card>
           ) : (
             thesisRevisions.map((thesis) => (
-              <Card key={thesis.id} className={`transition-all duration-200 hover:shadow-md ${
-                !thesis.is_active ? 'opacity-60 bg-muted/30' : ''
-              }`}>
+              <Card key={thesis.id} className="transition-all duration-200 hover:shadow-md">
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -534,9 +519,8 @@ export const Revisions = () => {
                             thesis.title
                           )}
                         </CardTitle>
-                        <Badge variant={thesis.is_active ? "secondary" : "outline"} 
-                               className={thesis.is_active ? "bg-purple-100 text-purple-800" : "bg-gray-100 text-gray-600"}>
-                          {thesis.is_active ? 'Active' : 'Inactive'}
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+                          Active
                         </Badge>
                         {thesis.has_changes && (
                           <Badge variant="outline" className="bg-yellow-100 text-yellow-700 border-yellow-200">
@@ -591,25 +575,14 @@ export const Revisions = () => {
                           >
                             <Edit3 className="h-4 w-4" />
                           </Button>
-                          {thesis.is_active ? (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => deactivateThesis(thesis.id)}
-                              className="text-red-600 hover:bg-red-50"
-                            >
-                              <X className="h-4 w-4" />
-                            </Button>
-                          ) : (
-                            <Button
-                              variant="outline"
-                              size="sm"
-                              onClick={() => activateThesis(thesis.id)}
-                              className="text-green-600 hover:bg-green-50"
-                            >
-                              <RotateCcw className="h-4 w-4" />
-                            </Button>
-                          )}
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => deactivateThesis(thesis.id)}
+                            className="text-red-600 hover:bg-red-50"
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
                         </>
                       )}
                     </div>
@@ -661,9 +634,7 @@ export const Revisions = () => {
             </Card>
           ) : (
             articles.map((article) => (
-              <Card key={article.id} className={`transition-all duration-200 hover:shadow-md ${
-                article.is_removed ? 'opacity-60 bg-muted/30' : ''
-              }`}>
+              <Card key={article.id} className="transition-all duration-200 hover:shadow-md">
                 <CardHeader>
                   <div className="flex items-start justify-between gap-4">
                     <div className="flex-1 min-w-0">
@@ -672,9 +643,8 @@ export const Revisions = () => {
                         <CardTitle className="text-lg font-semibold line-clamp-2">
                           {article.title}
                         </CardTitle>
-                        <Badge variant={article.is_removed ? "outline" : "secondary"} 
-                               className={article.is_removed ? "bg-gray-100 text-gray-600" : "bg-green-100 text-green-800"}>
-                          {article.is_removed ? 'Removed' : 'Active'}
+                        <Badge variant="secondary" className="bg-green-100 text-green-800">
+                          Active
                         </Badge>
                       </div>
                       
@@ -691,25 +661,14 @@ export const Revisions = () => {
                     </div>
                     
                     <div className="flex items-center gap-2">
-                      {article.is_removed ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => restoreArticle(article.id)}
-                          className="text-green-600 hover:bg-green-50"
-                        >
-                          <RotateCcw className="h-4 w-4" />
-                        </Button>
-                      ) : (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={() => removeArticle(article.id)}
-                          className="text-red-600 hover:bg-red-50"
-                        >
-                          <X className="h-4 w-4" />
-                        </Button>
-                      )}
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => removeArticle(article.id)}
+                        className="text-red-600 hover:bg-red-50"
+                      >
+                        <X className="h-4 w-4" />
+                      </Button>
                     </div>
                   </div>
                 </CardHeader>
