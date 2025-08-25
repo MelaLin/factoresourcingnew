@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { SourceInput } from '@/components/SourceInput';
 import { ThesisUpload } from '@/components/ThesisUpload';
 import { ThesisTextInput } from '@/components/ThesisTextInput';
@@ -6,10 +6,11 @@ import { ContentMatchView } from '@/components/ContentMatchView';
 import { BlogUpload } from '@/components/BlogUpload';
 
 import { ScholarPatentsSearch } from '@/components/ScholarPatentsSearch';
+import { Revisions } from '@/components/Revisions';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, FileSearch, Zap, Star, Globe } from 'lucide-react';
+import { TrendingUp, FileSearch, Zap, Star, Globe, FileText } from 'lucide-react';
 
 // API base URL - when served from backend, use relative paths
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -25,6 +26,20 @@ const Index = () => {
   const [isLoadingThesis, setIsLoadingThesis] = useState(false);
   const [isLoadingBlog, setIsLoadingBlog] = useState(false);
   const [matchedContent, setMatchedContent] = useState(initialMatchedContent);
+
+  // Listen for revisions committed event
+  useEffect(() => {
+    const handleRevisionsCommitted = (event: CustomEvent) => {
+      console.log('🔄 Revisions committed, refreshing matches...');
+      fetchMatches();
+    };
+    
+    window.addEventListener('revisionsCommitted', handleRevisionsCommitted as EventListener);
+    
+    return () => {
+      window.removeEventListener('revisionsCommitted', handleRevisionsCommitted as EventListener);
+    };
+  }, []);
 
   const fetchMatches = async () => {
     try {
@@ -219,6 +234,11 @@ const Index = () => {
               Setup
             </TabsTrigger>
 
+            <TabsTrigger value="revisions" className="flex items-center gap-2">
+              <FileText className="h-4 w-4" />
+              Revisions
+            </TabsTrigger>
+
             <TabsTrigger value="matches" className="flex items-center gap-2">
               <FileSearch className="h-4 w-4" />
               Matches
@@ -349,6 +369,10 @@ const Index = () => {
                 </p>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="revisions" className="space-y-8">
+            <Revisions />
           </TabsContent>
 
           <TabsContent value="matches">
