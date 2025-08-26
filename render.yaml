@@ -1,18 +1,21 @@
 services:
-  # Single Service (FastAPI + Frontend)
+  # Single Service Deployment: Backend serves frontend
   - type: web
-    name: factoresourcing
+    name: factoresourcing-app
     env: python
     plan: starter
     rootDir: backend
-    buildCommand: python -m pip install --upgrade pip setuptools wheel && pip install -r requirements.txt
+    buildCommand: |
+      pip install -r requirements.txt
+      # Copy frontend assets
+      cp -r ../frontend/dist/* frontend/
     startCommand: python -m uvicorn main:app --host 0.0.0.0 --port $PORT
-    autoDeploy: true
     envVars:
       - key: PYTHON_VERSION
-        value: 3.12.0
+        value: 3.9.16
       - key: PORT
         value: 8000
       # Add your OpenAI API key here if you have one
       # - key: OPENAI_API_KEY
       #   value: your-openai-api-key-here
+    autoDeploy: true

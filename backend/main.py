@@ -328,9 +328,11 @@ else:
 app.add_middleware(
     CORSMiddleware,
     allow_origins=[
+        "https://factoresourcing-app.onrender.com",  # New Render service URL
         "https://factoresourcing.onrender.com",  # Your frontend service URL
         "https://factoresourcingnew.onrender.com",  # Alternative frontend URL
-        "http://localhost:5173",  # Local development
+        "http://localhost:8080",  # Local development (Vite default)
+        "http://localhost:5173",  # Alternative local port
         "http://localhost:3000",  # Alternative local port
     ],
     allow_credentials=True,
