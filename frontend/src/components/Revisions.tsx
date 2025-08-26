@@ -603,7 +603,12 @@ export const Revisions = () => {
                   ) : (
                     <div className="space-y-3">
                       <div className="text-sm text-muted-foreground">
-                        <strong>Content Preview:</strong> {thesis.content.substring(0, 200)}...
+                        <strong>Full Thesis Content:</strong>
+                      </div>
+                      <div className="bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto">
+                        <pre className="whitespace-pre-wrap text-sm font-mono text-gray-800 leading-relaxed">
+                          {thesis.content}
+                        </pre>
                       </div>
                       {thesis.has_changes && (
                         <div className="text-xs text-yellow-600 bg-yellow-50 p-2 rounded">
