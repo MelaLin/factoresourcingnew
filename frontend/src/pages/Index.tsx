@@ -10,6 +10,7 @@ import KeywordSearch from '@/components/KeywordSearch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { TrendingUp, FileSearch, Zap, Star, Globe, FileText, Search } from 'lucide-react';
 
 // API base URL - when served from backend, use relative paths
@@ -25,6 +26,7 @@ const Index = () => {
   const [isLoadingThesis, setIsLoadingThesis] = useState(false);
   const [isLoadingBlog, setIsLoadingBlog] = useState(false);
   const [matchedContent, setMatchedContent] = useState(initialMatchedContent);
+  const [keywordSearchResults, setKeywordSearchResults] = useState<any[]>([]);
 
   // Listen for revisions committed event
   useEffect(() => {
@@ -263,10 +265,80 @@ const Index = () => {
                 <ScholarPatentsSearch 
                   onResultsFound={(results) => {
                     console.log('Scholar/Patents results found:', results);
-                    // Optionally trigger matches refresh
+                    
+                    // Store the keyword search results
+                    if (results && results.length > 0) {
+                      setKeywordSearchResults(results);
+                      
+                      // Extract URLs from results
+                      const newUrls = results.map((result: any) => result.url).filter(Boolean);
+                      setSources(prev => [...new Set([...prev, ...newUrls])]);
+                      
+                      // Show success message
+                      console.log(`✅ Added ${results.length} new sources from keyword search`);
+                    }
+                    
+                    // Trigger matches refresh to show new content
                     fetchMatches();
                   }}
                 />
+                
+                {/* Keyword Search Results Display */}
+                {keywordSearchResults.length > 0 && (
+                  <Card className="border-l-4 border-l-blue-500">
+                    <CardHeader>
+                      <CardTitle className="text-lg text-blue-600">
+                        🔍 Keyword Search Results ({keywordSearchResults.length} sources)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-3">
+                        {keywordSearchResults.slice(0, 5).map((result, index) => (
+                          <div key={index} className="flex items-start gap-3 p-3 bg-blue-50 rounded-lg">
+                            <div className="flex-1">
+                              <h4 className="font-medium text-sm">
+                                <a 
+                                  href={result.url} 
+                                  target="_blank" 
+                                  rel="noopener noreferrer"
+                                  className="hover:text-blue-600 transition-colors"
+                                >
+                                  {result.title || `Source ${index + 1}`}
+                                </a>
+                              </h4>
+                              <p className="text-xs text-gray-600 mt-1">
+                                {result.summary?.substring(0, 100)}...
+                              </p>
+                              <div className="flex gap-2 mt-2">
+                                <Badge variant="outline" className="text-xs">
+                                  {result.source_type || 'Unknown'}
+                                </Badge>
+                                {result.keywords?.slice(0, 3).map((keyword: string, idx: number) => (
+                                  <Badge key={idx} variant="secondary" className="text-xs">
+                                    {keyword}
+                                  </Badge>
+                                ))}
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                        {keywordSearchResults.length > 5 && (
+                          <p className="text-sm text-gray-500 text-center">
+                            ... and {keywordSearchResults.length - 5} more sources
+                          </p>
+                        )}
+                        <div className="text-center mt-4">
+                          <p className="text-sm text-green-600">
+                            ✅ All sources have been processed and added to the system
+                          </p>
+                          <p className="text-xs text-gray-500 mt-1">
+                            Check the Revisions tab to see all sources, or go to Matches to see thesis correlations
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
               </div>
 
 

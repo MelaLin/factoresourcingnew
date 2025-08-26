@@ -45,26 +45,55 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
     
     setIsSearching(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/api/scholar/search`, {
+      console.log('🔍 Starting comprehensive keyword search for:', keyword);
+      
+      const response = await fetch(`${API_BASE_URL}/api/search/keyword`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ keyword: keyword.trim(), max_results: 10 }),
+        body: JSON.stringify({ keyword: keyword.trim() }),
       });
 
       if (response.ok) {
         const data = await response.json();
-        setScholarResults(data.results || []);
-        if (data.results && data.results.length > 0) {
-          onResultsFound(data.results);
+        console.log('✅ Keyword search successful:', data);
+        
+        // Extract scholar results from the comprehensive search
+        const scholarSources = data.sources?.filter((source: any) => source.source_type === 'google_scholar') || [];
+        setScholarResults(scholarSources.map((source: any) => ({
+          title: source.title,
+          url: source.url,
+          authors: ['Author information available'],
+          abstract: source.summary,
+          year: new Date().getFullYear(),
+          citations: 0,
+          source: 'Google Scholar'
+        })));
+        
+        // Extract patent results
+        const patentSources = data.sources?.filter((source: any) => source.source_type === 'google_patent') || [];
+        setPatentResults(patentSources.map((source: any) => ({
+          title: source.title,
+          url: source.url,
+          authors: ['Inventor information available'],
+          abstract: source.summary,
+          publish_date: new Date().toISOString(),
+          patent_number: source.url.split('/').pop() || 'Unknown',
+          source: 'Google Patents'
+        })));
+        
+        // Notify parent component of all results
+        if (data.sources && data.sources.length > 0) {
+          onResultsFound(data.sources);
         }
-        console.log('Scholar search results:', data);
+        
+        console.log(`📊 Found ${scholarSources.length} scholar papers and ${patentSources.length} patents`);
       } else {
-        console.error('Scholar search failed:', response.status);
+        console.error('Keyword search failed:', response.status);
       }
     } catch (error) {
-      console.error('Error searching Google Scholar:', error);
+      console.error('Error in keyword search:', error);
     } finally {
       setIsSearching(false);
     }
@@ -77,14 +106,14 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
     setIsSearching(true);
     
     try {
-      console.log('📡 Making API request to:', `${API_BASE_URL}/api/patents/search`);
+      console.log('📡 Making API request to comprehensive keyword search');
       
-      const response = await fetch(`${API_BASE_URL}/api/patents/search`, {
+      const response = await fetch(`${API_BASE_URL}/api/search/keyword`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ keyword: keyword.trim(), max_results: 10 }),
+        body: JSON.stringify({ keyword: keyword.trim() }),
       });
 
       console.log('📥 Response received:', response.status, response.ok);
@@ -92,17 +121,24 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
       if (response.ok) {
         const data = await response.json();
         console.log('📊 Parsed data:', data);
-        console.log('📋 Results array:', data.results);
         
-        // Set results safely
-        const safeResults = data.results || [];
-        console.log('🛡️ Safe results:', safeResults);
+        // Extract patent results from the comprehensive search
+        const patentSources = data.sources?.filter((source: any) => source.source_type === 'google_patent') || [];
+        console.log('🛡️ Patent results:', patentSources);
         
-        setPatentResults(safeResults);
+        setPatentResults(patentSources.map((source: any) => ({
+          title: source.title,
+          url: source.url,
+          authors: ['Inventor information available'],
+          abstract: source.summary,
+          publish_date: new Date().toISOString(),
+          patent_number: source.url.split('/').pop() || 'Unknown',
+          source: 'Google Patents'
+        })));
         
-        if (safeResults.length > 0) {
-          console.log('✅ Calling onResultsFound with:', safeResults);
-          onResultsFound(safeResults);
+        if (patentSources.length > 0) {
+          console.log('✅ Calling onResultsFound with:', patentSources);
+          onResultsFound(patentSources);
         }
         
         console.log('🎯 Patent search completed successfully');

@@ -10,5 +10,53 @@
     "is_starred": false,
     "last_monitored": "2025-08-26T11:53:00.123183",
     "search_type": "keyword_search"
+  },
+  {
+    "id": "keyword_1_1756224783",
+    "keyword": "solar energy",
+    "search_time": "2025-08-26T12:13:03.322247",
+    "scholar_papers_found": 0,
+    "patents_found": 0,
+    "total_sources": 0,
+    "processed_sources": 0,
+    "is_starred": false,
+    "last_monitored": "2025-08-26T12:13:03.322261",
+    "search_type": "keyword_search"
+  },
+  {
+    "id": "keyword_2_1756224844",
+    "keyword": "solar energy",
+    "search_time": "2025-08-26T12:14:04.604087",
+    "scholar_papers_found": 0,
+    "patents_found": 0,
+    "total_sources": 0,
+    "processed_sources": 0,
+    "is_starred": false,
+    "last_monitored": "2025-08-26T12:14:04.604098",
+    "search_type": "keyword_search"
+  },
+  {
+    "id": "keyword_3_1756225221",
+    "keyword": "solar energy",
+    "search_time": "2025-08-26T12:20:21.436967",
+    "scholar_papers_found": 0,
+    "patents_found": 0,
+    "total_sources": 0,
+    "processed_sources": 0,
+    "is_starred": false,
+    "last_monitored": "2025-08-26T12:20:21.436978",
+    "search_type": "keyword_search"
+  },
+  {
+    "id": "keyword_4_1756225250",
+    "keyword": "solar energy",
+    "search_time": "2025-08-26T12:20:50.086351",
+    "scholar_papers_found": 5,
+    "patents_found": 5,
+    "total_sources": 10,
+    "processed_sources": 10,
+    "is_starred": false,
+    "last_monitored": "2025-08-26T12:20:50.086362",
+    "search_type": "keyword_search"
   }
 ]

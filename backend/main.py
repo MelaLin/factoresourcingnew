@@ -1107,6 +1107,60 @@ async def test_blog_fallback_scraping(request: dict):
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error in test: {str(e)}")
 
+@app.get("/api/history")
+async def get_comprehensive_history():
+    """Get comprehensive history of all content types for the Revisions component"""
+    try:
+        print("📚 Fetching comprehensive history for Revisions component")
+        
+        history = []
+        
+        # Add blog searches
+        for blog_search in blog_searches:
+            history.append({
+                "id": blog_search["id"],
+                "type": "blog_search",
+                "url": blog_search["url"],
+                "timestamp": blog_search["search_time"],
+                "total_articles": blog_search["total_articles_found"],
+                "processed_articles": blog_search["processed_articles"],
+                "search_type": blog_search.get("search_type", "blog_search")
+            })
+        
+        # Add thesis uploads
+        for thesis in thesis_uploads:
+            history.append({
+                "id": thesis["id"],
+                "type": "thesis",
+                "title": f"Thesis: {thesis.get('title', thesis.get('filename', 'Unknown'))}",
+                "content": thesis.get("summary", ""),
+                "full_content": thesis.get("full_content", ""),
+                "timestamp": thesis.get("upload_time", ""),
+                "file_type": thesis.get("file_type", "text")
+            })
+        
+        # Add articles
+        for article in articles:
+            history.append({
+                "id": f"article_{len(history)}",
+                "type": "source",
+                "url": article["url"],
+                "title": article["title"],
+                "summary": article.get("summary", ""),
+                "source_blog": article.get("source_blog", ""),
+                "source_type": article.get("source_type", "unknown"),
+                "timestamp": article.get("publish_date", datetime.now().isoformat())
+            })
+        
+        print(f"📊 Returning {len(history)} history items")
+        return history
+        
+    except Exception as e:
+        print(f"❌ Error fetching history: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error fetching history: {str(e)}")
+
 @app.post("/api/thesis/text")
 async def add_thesis_text(request: dict):
     """Add thesis text directly (for copy-paste)"""
