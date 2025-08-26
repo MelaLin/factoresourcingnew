@@ -438,10 +438,11 @@ class ScholarResult(BaseModel):
 
 
 
-# Global storage (in production, use a proper database)
-articles = []
-thesis_uploads = []  # Track thesis uploads for history
-blog_searches = []  # Track blog search queries for starring
+# Global storage with persistent storage (in production, use a proper database)
+from persistent_storage import persistent_storage
+
+# Load existing data from persistent storage
+articles, thesis_uploads, blog_searches = persistent_storage.load_all_data()
 starred_blogs = []  # Track starred blogs for continuous monitoring
 
 # Add some test data to ensure the system works
@@ -476,6 +477,47 @@ async def hello():
     """Example API endpoint"""
     return {"message": "Hello from FactorESourcing API!", "status": "healthy"}
 
+@app.get("/api/debug/thesis")
+async def debug_thesis():
+    """Debug endpoint to check thesis data"""
+    try:
+        print(f"🔍 Debug thesis data requested")
+        print(f"   Thesis uploads count: {len(thesis_uploads)}")
+        
+        for i, thesis in enumerate(thesis_uploads):
+            print(f"   Thesis {i+1}:")
+            print(f"      ID: {thesis.get('id', 'No ID')}")
+            print(f"      Title: {thesis.get('title', 'No Title')}")
+            print(f"      Filename: {thesis.get('filename', 'No Filename')}")
+            print(f"      Content length: {thesis.get('content_length', 0)}")
+            print(f"      Has full_content: {'full_content' in thesis}")
+            print(f"      Full content length: {len(thesis.get('full_content', ''))}")
+            print(f"      Has content: {'content' in thesis}")
+            print(f"      Content length: {len(thesis.get('content', ''))}")
+            print(f"      Upload time: {thesis.get('upload_time', 'No time')}")
+            print(f"      ---")
+        
+        return {
+            "thesis_count": len(thesis_uploads),
+            "thesis_details": [
+                {
+                    "id": thesis.get("id"),
+                    "title": thesis.get("title"),
+                    "filename": thesis.get("filename"),
+                    "content_length": thesis.get("content_length"),
+                    "has_full_content": "full_content" in thesis,
+                    "full_content_length": len(thesis.get("full_content", "")),
+                    "has_content": "content" in thesis,
+                    "content_length": len(thesis.get("content", "")),
+                    "upload_time": thesis.get("upload_time")
+                }
+                for thesis in thesis_uploads
+            ]
+        }
+    except Exception as e:
+        print(f"❌ Error in debug thesis: {e}")
+        return {"error": str(e)}
+
 @app.post("/api/sources", response_model=SourceResponse)
 async def add_source(request: SourceRequest):
     """Add new content source"""
@@ -505,6 +547,10 @@ async def add_source(request: SourceRequest):
             "upload_time": datetime.now().isoformat()
         }
         articles.append(article)
+        
+        # Save to persistent storage
+        persistent_storage.save_articles(articles)
+        print(f"💾 Saved {len(articles)} articles to persistent storage")
         
         # Trigger immediate content matching analysis
         print("🔄 Triggering content matching analysis after source addition...")
@@ -565,6 +611,10 @@ async def upload_thesis(
             }
             thesis_uploads.append(thesis_info)
             print(f"📝 Thesis tracked for history: {thesis_info}")
+            
+            # Save to persistent storage
+            persistent_storage.save_thesis_uploads(thesis_uploads)
+            print(f"💾 Saved {len(thesis_uploads)} thesis uploads to persistent storage")
             
             # Trigger immediate content matching analysis
             print("🔄 Triggering content matching analysis...")
@@ -793,6 +843,10 @@ async def add_thesis_text(request: dict):
         }
         thesis_uploads.append(thesis_info)
         print(f"📝 Thesis text tracked for history: {thesis_info}")
+        
+        # Save to persistent storage
+        persistent_storage.save_thesis_uploads(thesis_uploads)
+        print(f"💾 Saved {len(thesis_uploads)} thesis uploads to persistent storage")
         
         # Trigger immediate content matching analysis
         print("🔄 Triggering content matching analysis...")
@@ -1342,12 +1396,18 @@ async def get_history():
                 "article_index": article.get("article_index", 0)
             })
         
-        # Add thesis uploads
+        # Add thesis uploads with FULL CONTENT
         for thesis in thesis_uploads:
+            print(f"   📝 Processing thesis: {thesis.get('title', thesis.get('filename', 'Text Input'))}")
+            print(f"      Content length: {thesis.get('content_length', 0)}")
+            print(f"      Has full_content: {'full_content' in thesis}")
+            print(f"      Full content length: {len(thesis.get('full_content', ''))}")
+            
             history_items.append({
                 "id": thesis["id"],
                 "type": "thesis",
                 "title": f"Thesis: {thesis.get('title', thesis.get('filename', 'Text Input'))}",
+                "content": thesis.get("full_content", thesis.get("content", "")),  # Include full content
                 "content_length": thesis["content_length"],
                 "timestamp": thesis["upload_time"],
                 "is_starred": False,  # Thesis can't be starred
