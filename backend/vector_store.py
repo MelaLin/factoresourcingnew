@@ -142,21 +142,32 @@ def find_relevant_articles(articles):
             match_reasons.append(f"Content quality: {content_score:.2f}")
         detailed_scores["content_quality"] = content_score
         
-        # Strategy 5: Enhanced thesis alignment analysis
+        # Strategy 5: Enhanced thesis alignment analysis (works offline)
         if thesis_points and thesis_keywords:
             try:
-                alignment_analysis = analyze_thesis_alignment(
-                    article.get('full_content', article.get('summary', '')),
-                    thesis_points,
-                    thesis_keywords
-                )
+                # Try AI analysis first, fallback to text analysis if it fails
+                try:
+                    alignment_analysis = analyze_thesis_alignment(
+                        article.get('full_content', article.get('summary', '')),
+                        thesis_points,
+                        thesis_keywords
+                    )
+                except Exception as ai_error:
+                    print(f"   ⚠️  AI analysis failed, using fallback: {ai_error}")
+                    # Use fallback matcher
+                    from fallback_matcher import fallback_matcher
+                    alignment_analysis = fallback_matcher.analyze_thesis_alignment(
+                        article.get('full_content', article.get('summary', '')),
+                        ' '.join(thesis_points),
+                        thesis_keywords
+                    )
                 
                 # Add alignment score to match scores
                 alignment_score = alignment_analysis.get('overall_score', 0.0)
                 match_scores.append(alignment_score * 0.3)  # 30% weight for thesis alignment
                 detailed_scores["thesis_alignment"] = alignment_score
                 
-                # Update matched points with AI analysis
+                # Update matched points with analysis
                 if alignment_analysis.get('matched_points'):
                     matched_points = alignment_analysis['matched_points']
                 

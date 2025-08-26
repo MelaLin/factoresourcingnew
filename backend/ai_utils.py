@@ -9,25 +9,33 @@ openai.api_key = os.getenv("OPENAI_API_KEY")
 def summarize_text(text):
     # Check if OpenAI API key is available
     if not openai.api_key:
-        # Enhanced text-based summary when API is not available
-        words = text.split()
-        
-        # Create a more intelligent summary
-        if len(words) > 200:
-            # Take first 150 words and last 50 words for better context
-            first_part = ' '.join(words[:150])
-            last_part = ' '.join(words[-50:])
-            summary = f"{first_part}... {last_part}"
-        elif len(words) > 100:
-            summary = ' '.join(words[:100]) + "..."
-        else:
-            summary = text
-        
-        # Extract basic keywords
-        keywords = extract_keywords_from_text(text)
-        
-        print(f"📝 Generated fallback summary: {len(summary)} characters")
-        return (summary, keywords)
+        # Use the advanced fallback system
+        try:
+            from fallback_matcher import fallback_matcher
+            summary = fallback_matcher.generate_smart_summary(text, 300)
+            keywords = fallback_matcher.extract_keywords(text, 8)
+            print(f"📝 Generated smart fallback summary: {len(summary)} characters")
+            return (summary, keywords)
+        except ImportError:
+            # Fallback to basic text analysis
+            words = text.split()
+            
+            # Create a more intelligent summary
+            if len(words) > 200:
+                # Take first 150 words and last 50 words for better context
+                first_part = ' '.join(words[:150])
+                last_part = ' '.join(words[-50:])
+                summary = f"{first_part}... {last_part}"
+            elif len(words) > 100:
+                summary = ' '.join(words[:100]) + "..."
+            else:
+                summary = text
+            
+            # Extract basic keywords
+            keywords = extract_keywords_from_text(text)
+            
+            print(f"📝 Generated basic fallback summary: {len(summary)} characters")
+            return (summary, keywords)
     
     try:
         prompt = f"""
@@ -425,34 +433,41 @@ def analyze_thesis_alignment(article_text: str, thesis_points: list, thesis_keyw
     """Analyze how well an article aligns with the user's thesis"""
     # Check if OpenAI API key is available
     if not openai.api_key:
-        # Fallback analysis using text similarity
-        alignment_score = 0.0
-        matched_points = []
-        alignment_reasons = []
-        
-        # Simple keyword matching
-        article_lower = article_text.lower()
-        thesis_lower = ' '.join(thesis_keywords).lower()
-        
-        # Count keyword matches
-        keyword_matches = sum(1 for keyword in thesis_keywords if keyword.lower() in article_lower)
-        if thesis_keywords:
-            keyword_score = keyword_matches / len(thesis_keywords)
-            alignment_score += keyword_score * 0.4
-        
-        # Simple point matching
-        for point in thesis_points:
-            point_lower = point.lower()
-            if any(word in article_lower for word in point_lower.split() if len(word) > 3):
-                matched_points.append(point)
-                alignment_score += 0.2
-        
-        return {
-            "overall_score": min(alignment_score, 1.0),
-            "matched_points": matched_points,
-            "alignment_reasons": [f"Keyword match: {keyword_matches}/{len(thesis_keywords)}", f"Point matches: {len(matched_points)}"],
-            "analysis_type": "fallback_text_analysis"
-        }
+        # Use the advanced fallback system
+        try:
+            from fallback_matcher import fallback_matcher
+            analysis = fallback_matcher.analyze_thesis_alignment(article_text, ' '.join(thesis_points), thesis_keywords)
+            print(f"🎯 Generated smart fallback thesis alignment: {analysis['overall_score']:.2f}")
+            return analysis
+        except ImportError:
+            # Fallback to basic text analysis
+            alignment_score = 0.0
+            matched_points = []
+            alignment_reasons = []
+            
+            # Simple keyword matching
+            article_lower = article_text.lower()
+            thesis_lower = ' '.join(thesis_keywords).lower()
+            
+            # Count keyword matches
+            keyword_matches = sum(1 for keyword in thesis_keywords if keyword.lower() in article_lower)
+            if thesis_keywords:
+                keyword_score = keyword_matches / len(thesis_keywords)
+                alignment_score += keyword_score * 0.4
+            
+            # Simple point matching
+            for point in thesis_points:
+                point_lower = point.lower()
+                if any(word in article_lower for word in point_lower.split() if len(word) > 3):
+                    matched_points.append(point)
+                    alignment_score += 0.2
+            
+            return {
+                "overall_score": min(alignment_score, 1.0),
+                "matched_points": matched_points,
+                "alignment_reasons": [f"Keyword match: {keyword_matches}/{len(thesis_keywords)}", f"Point matches: {len(matched_points)}"],
+                "analysis_type": "fallback_text_analysis"
+            }
     
     try:
         prompt = f"""

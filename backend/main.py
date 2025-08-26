@@ -157,27 +157,42 @@ def real_scrape_url(url: str) -> dict:
             # Clean and extract text - enhanced for news articles
             for tag in main_content(['script', 'style', 'nav', 'header', 'footer', 'aside', 
                                    '.advertisement', '.ads', '.social-share', '.related-posts',
-                                   '.newsletter-signup', '.comments', '.author-bio']):
+                                   '.newsletter-signup', '.comments', '.author-bio', '.sidebar',
+                                   '.navigation', '.menu', '.breadcrumb', '.pagination']):
                 tag.decompose()
             
-            # Extract text with better structure
+            # Extract text with better structure - preserve more content
             text_content = main_content.get_text(separator='\n', strip=True)
             
-            # Clean up whitespace and improve readability
-            text_content = re.sub(r'\n\s*\n', '\n\n', text_content)  # Remove excessive line breaks
-            text_content = re.sub(r'\s+', ' ', text_content)  # Clean up whitespace
+            # Clean up whitespace but preserve meaningful structure
+            text_content = re.sub(r'\n\s*\n\s*\n+', '\n\n', text_content)  # Remove excessive line breaks
             text_content = re.sub(r'^\s+|\s+$', '', text_content, flags=re.MULTILINE)  # Trim lines
             
-            # Remove common news site artifacts
-            text_content = re.sub(r'Share this article|Follow us|Subscribe|Newsletter|Related articles', '', text_content, flags=re.IGNORECASE)
+            # Remove common news site artifacts but keep more content
+            text_content = re.sub(r'Share this article|Follow us|Subscribe|Newsletter|Related articles|Cookie Policy|Privacy Policy|Terms of Service', '', text_content, flags=re.IGNORECASE)
+            
+            # Ensure we have substantial content
+            if len(text_content) < 100:
+                # Try alternative extraction if main content is too short
+                paragraphs = soup.find_all('p')
+                if paragraphs:
+                    text_content = '\n\n'.join([p.get_text().strip() for p in paragraphs if len(p.get_text().strip()) > 20])
             
             text_content = text_content.strip()
         else:
             text_content = "Content could not be extracted from this page."
         
-        # Extract keywords and companies from real content
-        keywords = extract_keywords_from_text(text_content)
-        companies = extract_companies_from_text(text_content)
+        # Extract keywords and companies from real content using fallback system
+        try:
+            from fallback_matcher import fallback_matcher
+            keywords = fallback_matcher.extract_keywords(text_content, 15)
+            companies = fallback_matcher.extract_companies(text_content, 10)
+            print(f"   🔑 Extracted {len(keywords)} keywords and {len(companies)} companies using fallback system")
+        except ImportError:
+            # Fallback to basic extraction
+            keywords = extract_keywords_from_text(text_content)
+            companies = extract_companies_from_text(text_content)
+            print(f"   🔑 Extracted {len(keywords)} keywords and {len(companies)} companies using basic system")
         
         # Try to extract publish date
         publish_date = None
