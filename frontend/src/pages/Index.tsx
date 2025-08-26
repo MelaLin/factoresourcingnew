@@ -6,10 +6,11 @@ import { BlogUpload } from '@/components/BlogUpload';
 
 import { ScholarPatentsSearch } from '@/components/ScholarPatentsSearch';
 import { Revisions } from '@/components/Revisions';
+import KeywordSearch from '@/components/KeywordSearch';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { TrendingUp, FileSearch, Zap, Star, Globe, FileText } from 'lucide-react';
+import { TrendingUp, FileSearch, Zap, Star, Globe, FileText, Search } from 'lucide-react';
 
 // API base URL - when served from backend, use relative paths
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
@@ -201,6 +202,11 @@ const Index = () => {
               Setup
             </TabsTrigger>
 
+            <TabsTrigger value="keyword-search" className="flex items-center gap-2">
+              <Search className="h-4 w-4" />
+              Keyword Search
+            </TabsTrigger>
+
             <TabsTrigger value="revisions" className="flex items-center gap-2">
               <FileText className="h-4 w-4" />
               Revisions
@@ -263,6 +269,8 @@ const Index = () => {
                 />
               </div>
 
+
+
               {/* Thesis Input */}
               <div className="space-y-4">
                 <ThesisTextInput 
@@ -309,6 +317,10 @@ const Index = () => {
                 </p>
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="keyword-search" className="space-y-8">
+            <KeywordSearch />
           </TabsContent>
 
           <TabsContent value="revisions" className="space-y-8">

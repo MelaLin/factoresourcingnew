@@ -531,7 +531,7 @@ def get_patent_search_urls(base_url: str, query: str = None) -> List[str]:
     
     return patent_urls
 
-async def search_google_scholar(keyword: str, max_results: int = 10) -> List[Dict]:
+async def search_google_scholar(keyword: str, max_results: int = 25) -> List[Dict]:
     """Search Google Scholar for academic papers"""
     try:
         print(f"🔍 Searching Google Scholar for: {keyword}")
@@ -642,43 +642,335 @@ async def search_google_scholar(keyword: str, max_results: int = 10) -> List[Dic
         traceback.print_exc()
         return []
 
-async def search_google_patents(keyword: str, max_results: int = 10) -> List[Dict]:
-    """Search Google Patents for patent documents using a more robust approach"""
+async def search_google_patents(keyword: str, max_results: int = 25) -> List[Dict]:
+    """Search Google Patents for recent patents related to a keyword"""
     try:
-        print(f"🔍 Searching Google Patents for: {keyword}")
+        print(f"🔬 Searching Google Patents for: {keyword}")
         
-        # Try multiple search approaches
-        results = []
+        # Google Patents search URL
+        search_url = f"https://patents.google.com/?q=({keyword})&oq={keyword}&sort=new"
         
-        # Approach 1: Try USPTO API (more reliable)
+        # Enhanced headers for Google Patents
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Referer': 'https://www.google.com/',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'cross-site'
+        }
+        
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        timeout = aiohttp.ClientTimeout(total=30, connect=10)
+        
+        async with aiohttp.ClientSession(
+            headers=headers, 
+            timeout=timeout,
+            connector=aiohttp.TCPConnector(ssl=ssl_context)
+        ) as session:
+            async with session.get(search_url) as response:
+                if response.status != 200:
+                    print(f"❌ Failed to fetch Google Patents: {response.status}")
+                    return []
+                
+                html = await response.text()
+                print(f"✅ Successfully fetched Google Patents results ({len(html)} characters)")
+                
+                # Parse with BeautifulSoup
+                soup = BeautifulSoup(html, 'html.parser')
+                
+                results = []
+                # Look for Google Patents result elements
+                patent_results = soup.find_all('article', class_='result')
+                
+                if not patent_results:
+                    # Try alternative selectors
+                    patent_results = soup.find_all('div', class_='result')
+                
+                if not patent_results:
+                    # Try finding any patent links
+                    patent_results = soup.find_all('a', href=True)
+                    patent_results = [p for p in patent_results if '/patent/' in p.get('href', '')]
+                
+                # If still no results, try broader search patterns
+                if not patent_results:
+                    # Look for any links that might contain patent IDs
+                    all_links = soup.find_all('a', href=True)
+                    patent_results = []
+                    for link in all_links:
+                        href = link.get('href', '')
+                        # Look for patent-like URLs
+                        if '/patent/' in href or re.search(r'[A-Z]{2}\d+[A-Z0-9]*', href):
+                            patent_results.append(link)
+                
+                # If still no results, try to extract from search page content
+                if not patent_results:
+                    # Look for patent information in the page content
+                    patent_texts = soup.find_all(text=re.compile(r'patent|invention|claim', re.IGNORECASE))
+                    if patent_texts:
+                        # Create placeholder results based on page content
+                        for i, text in enumerate(patent_texts[:max_results]):
+                            if len(text.strip()) > 20:  # Only meaningful text
+                                # Create a proper mock element object
+                                # Create a proper mock element object
+                                class MockElement:
+                                    def __init__(self, text_content):
+                                        self.text_content = text_content
+                                        self.name = 'div'  # Add the name attribute
+                                    
+                                    def get(self, attr, default=None):
+                                        return default
+                                    
+                                    def find(self, *args, **kwargs):
+                                        return None
+                                    
+                                    def get_text(self, strip=False):
+                                        return self.text_content.strip() if strip else self.text_content
+                                
+                                patent_results.append(MockElement(text.strip()))
+                
+                print(f"🔍 Found {len(patent_results)} potential patent results")
+                
+                for i, result in enumerate(patent_results[:max_results]):
+                    try:
+                        # Extract patent information
+                        patent_info = await extract_patent_details(result, session)
+                        if patent_info:
+                            results.append(patent_info)
+                            print(f"   ✅ Processed patent {i+1}: {patent_info['title'][:50]}...")
+                        
+                    except Exception as e:
+                        print(f"   ⚠️  Error processing patent result {i+1}: {e}")
+                        continue
+                
+                print(f"🎯 Total patents processed: {len(results)}")
+                return results
+                
+    except Exception as e:
+        print(f"❌ Error in Google Patents search: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+async def extract_patent_details(patent_element, session) -> Dict:
+    """Extract detailed information from a patent result element"""
+    try:
+        patent_info = {}
+        
+        # Extract patent URL
+        if patent_element.name == 'a':
+            href = patent_element.get('href')
+        else:
+            link_elem = patent_element.find('a', href=True)
+            href = link_elem.get('href') if link_elem else None
+        
+        if not href or '/patent/' not in href:
+            return None
+        
+        # Convert to full URL if needed
+        if href.startswith('/'):
+            href = f"https://patents.google.com{href}"
+        elif not href.startswith('http'):
+            href = f"https://patents.google.com{href}"
+        
+        patent_info['url'] = href
+        
+        # Extract patent ID from URL
+        patent_id = href.split('/patent/')[-1].split('/')[0] if '/patent/' in href else None
+        patent_info['patent_id'] = patent_id
+        
+        # Extract title
+        title_elem = patent_element.find(['h3', 'h4', 'h5', '.title', '.headline'])
+        if title_elem:
+            patent_info['title'] = title_elem.get_text(strip=True)
+        else:
+            patent_info['title'] = f"Patent {patent_id}" if patent_id else "Unknown Patent"
+        
+        # Extract abstract/description
+        abstract_elem = patent_element.find(['p', '.abstract', '.description', '.summary'])
+        if abstract_elem:
+            patent_info['description'] = abstract_elem.get_text(strip=True)
+        else:
+            patent_info['description'] = f"Patent {patent_id} related to the search query"
+        
+        # Extract inventors
+        inventors_elem = patent_element.find(['.inventor', '.author', '.assignee'])
+        if inventors_elem:
+            inventors_text = inventors_elem.get_text(strip=True)
+            patent_info['inventors'] = [inv.strip() for inv in inventors_text.split(',') if inv.strip()]
+        else:
+            patent_info['inventors'] = ["Unknown Inventor"]
+        
+        # Extract filing date and publication date
+        date_elem = patent_element.find(['.date', '.filing-date', '.publication-date'])
+        if date_elem:
+            date_text = date_elem.get_text(strip=True)
+            # Try to extract year from date text
+            year_match = re.search(r'\b(19|20)\d{2}\b', date_text)
+            if year_match:
+                patent_info['filing_date'] = year_match.group()
+                patent_info['publication_date'] = year_match.group()
+            else:
+                patent_info['filing_date'] = None
+                patent_info['publication_date'] = None
+        else:
+            patent_info['filing_date'] = None
+            patent_info['publication_date'] = None
+        
+        # Extract assignee/company
+        assignee_elem = patent_element.find(['.assignee', '.company', '.owner'])
+        if assignee_elem:
+            patent_info['assignee'] = assignee_elem.get_text(strip=True)
+        else:
+            patent_info['assignee'] = None
+        
+        # Try to get more details from the individual patent page
         try:
-            uspto_results = await search_uspto_patents(keyword, max_results)
-            if uspto_results:
-                results.extend(uspto_results)
-                print(f"✅ USPTO search found {len(uspto_results)} patents")
+            async with session.get(href) as response:
+                if response.status == 200:
+                    patent_html = await response.text()
+                    patent_soup = BeautifulSoup(patent_html, 'html.parser')
+                    
+                    # Extract more detailed description
+                    detailed_desc = patent_soup.find('div', class_='abstract')
+                    if detailed_desc:
+                        patent_info['description'] = detailed_desc.get_text(strip=True)
+                    
+                    # Extract claims
+                    claims_elem = patent_soup.find('div', class_='claims')
+                    if claims_elem:
+                        patent_info['claims'] = claims_elem.get_text(strip=True)[:1000]  # Limit length
+                    
+                    # Extract classification
+                    class_elem = patent_soup.find('span', class_='classification')
+                    if class_elem:
+                        patent_info['classification'] = class_elem.get_text(strip=True)
+                    
         except Exception as e:
-            print(f"⚠️  USPTO search failed: {e}")
+            print(f"     ⚠️  Could not fetch detailed patent info: {e}")
+            # Continue with basic info
         
-        # Approach 2: Try Google Patents with different search patterns
-        if len(results) < max_results:
-            try:
-                google_results = await search_google_patents_direct(keyword, max_results - len(results))
-                if google_results:
-                    results.extend(google_results)
-                    print(f"✅ Google Patents search found {len(google_results)} patents")
-            except Exception as e:
-                print(f"⚠️  Google Patents search failed: {e}")
-        
-        # Approach 3: Return empty results if no patents found
-        if not results:
-            print(f"⚠️  No patents found via APIs")
-            return []
-        
-        print(f"✅ Patent search completed: {len(results)} patents found")
-        return results
+        return patent_info
         
     except Exception as e:
-        print(f"❌ Error searching Google Patents: {e}")
+        print(f"     ❌ Error extracting patent details: {e}")
+        return None
+
+async def search_google_scholar(keyword: str, max_results: int = 25) -> List[Dict]:
+    """Search Google Scholar for academic papers"""
+    try:
+        print(f"🔍 Searching Google Scholar for: {keyword}")
+        
+        # Google Scholar search URL
+        search_url = f"https://scholar.google.com/scholar?q={keyword.replace(' ', '+')}"
+        
+        # Enhanced headers for Google Scholar
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.9',
+            'Accept-Encoding': 'gzip, deflate, br',
+            'DNT': '1',
+            'Connection': 'keep-alive',
+            'Upgrade-Insecure-Requests': '1',
+            'Referer': 'https://www.google.com/'
+        }
+        
+        ssl_context = ssl.create_default_context()
+        ssl_context.check_hostname = False
+        ssl_context.verify_mode = ssl.CERT_NONE
+        
+        timeout = aiohttp.ClientTimeout(total=30, connect=10)
+        
+        async with aiohttp.ClientSession(
+            headers=headers, 
+            timeout=timeout,
+            connector=aiohttp.TCPConnector(ssl=ssl_context)
+        ) as session:
+            async with session.get(search_url) as response:
+                if response.status != 200:
+                    print(f"❌ Failed to fetch Google Scholar: {response.status}")
+                    return []
+                
+                html = await response.text()
+                print(f"✅ Successfully fetched Google Scholar results ({len(html)} characters)")
+                
+                # Parse with BeautifulSoup
+                soup = BeautifulSoup(html, 'html.parser')
+                
+                results = []
+                # Look for Google Scholar result divs
+                scholar_results = soup.find_all('div', class_='gs_r gs_or gs_scl')
+                
+                for i, result in enumerate(scholar_results[:max_results]):
+                    try:
+                        # Extract title and link
+                        title_elem = result.find('h3', class_='gs_rt')
+                        if not title_elem:
+                            continue
+                            
+                        title = title_elem.get_text(strip=True)
+                        link_elem = title_elem.find('a')
+                        url = link_elem.get('href') if link_elem else ""
+                        
+                        # Extract authors and year
+                        authors_elem = result.find('div', class_='gs_a')
+                        authors = []
+                        year = None
+                        if authors_elem:
+                            authors_text = authors_elem.get_text(strip=True)
+                            # Parse authors and year from text like "J Smith, A Johnson - 2023"
+                            if ' - ' in authors_text:
+                                authors_part = authors_text.split(' - ')[0]
+                                authors = [author.strip() for author in authors_part.split(',')]
+                                
+                                # Try to extract year
+                                year_match = re.search(r'(\d{4})', authors_text)
+                                if year_match:
+                                    year = int(year_match.group(1))
+                        
+                        # Extract abstract
+                        abstract_elem = result.find('div', class_='gs_rs')
+                        abstract = abstract_elem.get_text(strip=True) if abstract_elem else ""
+                        
+                        # Extract citation count
+                        citations_elem = result.find('div', class_='gs_fl')
+                        citations = 0
+                        if citations_elem:
+                            citations_text = citations_elem.get_text()
+                            citations_match = re.search(r'Cited by (\d+)', citations_text)
+                            if citations_match:
+                                citations = int(citations_match.group(1))
+                        
+                        results.append({
+                            "title": title,
+                            "url": url,
+                            "authors": authors,
+                            "abstract": abstract,
+                            "year": year,
+                            "citations": citations,
+                            "source": "Google Scholar"
+                        })
+                        
+                        print(f"   📚 Found: {title[:50]}...")
+                        
+                    except Exception as e:
+                        print(f"   ❌ Error parsing result {i}: {e}")
+                        continue
+                
+                print(f"✅ Google Scholar search completed: {len(results)} results found")
+                return results
+                
+    except Exception as e:
+        print(f"❌ Error searching Google Scholar: {e}")
         import traceback
         traceback.print_exc()
         return []
@@ -834,7 +1126,7 @@ async def search_google_patents_direct(keyword: str, max_results: int = 10) -> L
 
 
 
-def fallback_scrape_blog_articles(blog_url: str, max_articles: int = 50) -> List[Dict[str, Any]]:
+async def fallback_scrape_blog_articles(blog_url: str, max_articles: int = 50) -> List[Dict[str, Any]]:
     """
     Fallback scraping function for blogs containing many articles.
     This function provides multiple fallback strategies when primary scraping fails.
@@ -930,11 +1222,8 @@ def fallback_scrape_blog_articles(blog_url: str, max_articles: int = 50) -> List
                             return None
                         return await response.text()
             
-            # Run the async function
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            html_content = loop.run_until_complete(_fetch_with_enhanced_bs())
-            loop.close()
+            # Since we're already in an async context, just await the function
+            html_content = await _fetch_with_enhanced_bs()
             
             if html_content:
                 print(f"     ✅ Successfully fetched HTML ({len(html_content)} characters)")
@@ -1076,10 +1365,8 @@ def fallback_scrape_blog_articles(blog_url: str, max_articles: int = 50) -> List
                                     return await response.text()
                                 return None
                     
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    rss_content = loop.run_until_complete(_fetch_rss())
-                    loop.close()
+                    # Since we're already in an async context, just await the function
+                    rss_content = await _fetch_rss()
                     
                     if rss_content and ('<rss' in rss_content or '<feed' in rss_content):
                         print(f"     ✅ Found RSS feed: {rss_url}")
@@ -1172,10 +1459,8 @@ def fallback_scrape_blog_articles(blog_url: str, max_articles: int = 50) -> List
                                     return await response.text()
                                 return None
                     
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    sitemap_content = loop.run_until_complete(_fetch_sitemap())
-                    loop.close()
+                    # Since we're already in an async context, just await the function
+                    sitemap_content = await _fetch_sitemap()
                     
                     if sitemap_content and ('<urlset' in sitemap_content or '<sitemapindex' in sitemap_content):
                         print(f"     ✅ Found sitemap: {sitemap_url}")

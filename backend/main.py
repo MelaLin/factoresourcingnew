@@ -770,7 +770,7 @@ async def upload_blog(request: BlogUploadRequest):
         if not article_urls:
             print("⚠️  Primary scraping failed, attempting fallback scraping...")
             try:
-                fallback_articles = fallback_scrape_blog_articles(request.url)
+                fallback_articles = await fallback_scrape_blog_articles(request.url)
                 if fallback_articles:
                     print(f"✅ Fallback scraping successful: {len(fallback_articles)} articles found")
                     # Convert fallback articles to the expected format
@@ -800,7 +800,7 @@ async def upload_blog(request: BlogUploadRequest):
         elif len(article_urls) < 5:
             print(f"⚠️  Only {len(article_urls)} articles found with primary method, attempting fallback to get more...")
             try:
-                fallback_articles = fallback_scrape_blog_articles(request.url)
+                fallback_articles = await fallback_scrape_blog_articles(request.url)
                 if fallback_articles and len(fallback_articles) > len(article_urls):
                     print(f"✅ Fallback found {len(fallback_articles)} additional articles")
                     # Merge fallback articles with primary ones, avoiding duplicates
@@ -990,7 +990,7 @@ async def fallback_scrape_blog(request: dict):
         from scraper import fallback_scrape_blog_articles
         
         # Attempt fallback scraping
-        fallback_articles = fallback_scrape_blog_articles(url)
+        fallback_articles = await fallback_scrape_blog_articles(url)
         
         if fallback_articles:
             print(f"✅ Fallback scraping successful: {len(fallback_articles)} articles found")
@@ -1986,6 +1986,174 @@ async def catch_all_routes(full_path: str):
     
     # For all other routes, serve the frontend (SPA routing)
     return FileResponse("frontend/index.html")
+
+@app.post("/api/search/keyword")
+async def search_by_keyword(request: dict):
+    """Search Google Scholar and Google Patents by keyword and process through thesis matching"""
+    try:
+        keyword = request.get("keyword", "").strip()
+        if not keyword:
+            raise HTTPException(status_code=400, detail="Search keyword cannot be empty")
+        
+        print(f"🔍 Starting keyword search for: '{keyword}'")
+        print(f"   Target: 25 Google Scholar papers + 25 Google Patents = 50 total sources")
+        
+        # Import search functions
+        from scraper import search_google_scholar, search_google_patents
+        
+        # Search Google Scholar for recent papers
+        print(f"📚 Searching Google Scholar for recent papers...")
+        try:
+            scholar_papers = await search_google_scholar(keyword, max_results=25)
+            print(f"   ✅ Found {len(scholar_papers)} Google Scholar papers")
+        except Exception as e:
+            print(f"   ❌ Google Scholar search failed: {e}")
+            scholar_papers = []
+        
+        # Search Google Patents for recent patents
+        print(f"🔬 Searching Google Patents for recent patents...")
+        try:
+            patent_results = await search_google_patents(keyword, max_results=25)
+            print(f"   ✅ Found {len(patent_results)} Google Patents")
+        except Exception as e:
+            print(f"   ❌ Google Patents search failed: {e}")
+            patent_results = []
+        
+        # Combine all sources
+        all_sources = []
+        total_sources = len(scholar_papers) + len(patent_results)
+        
+        print(f"📊 Total sources found: {total_sources}")
+        
+        # Process Google Scholar papers
+        for i, paper in enumerate(scholar_papers):
+            try:
+                # Generate summary and keywords for the paper
+                summary, keywords = summarize_text(paper.get("abstract", paper.get("description", "")))
+                embedding = embed_text(summary)
+                
+                # Extract companies from the paper content
+                companies = extract_companies_from_text(paper.get("abstract", paper.get("description", "")))
+                
+                # Create paper object
+                paper_obj = {
+                    "url": paper.get("url", f"scholar_paper_{i+1}"),
+                    "title": paper.get("title", f"Google Scholar Paper {i+1}"),
+                    "summary": summary,
+                    "full_content": paper.get("abstract", paper.get("description", "")),
+                    "keywords": keywords,
+                    "companies": companies,
+                    "embedding": embedding,
+                    "publish_date": paper.get("year", datetime.now().year),
+                    "authors": paper.get("authors", ["Unknown Author"]),
+                    "source_type": "google_scholar",
+                    "source_keyword": keyword,
+                    "search_time": datetime.now().isoformat(),
+                    "article_index": i + 1
+                }
+                
+                all_sources.append(paper_obj)
+                print(f"   📚 Processed Scholar paper {i+1}: {paper_obj['title'][:50]}...")
+                
+            except Exception as e:
+                print(f"   ❌ Error processing Scholar paper {i+1}: {e}")
+                continue
+        
+        # Process Google Patents
+        for i, patent in enumerate(patent_results):
+            try:
+                # Generate summary and keywords for the patent
+                summary, keywords = summarize_text(patent.get("description", patent.get("abstract", "")))
+                embedding = embed_text(summary)
+                
+                # Extract companies from the patent content
+                companies = extract_companies_from_text(patent.get("description", patent.get("abstract", "")))
+                
+                # Create patent object
+                patent_obj = {
+                    "url": patent.get("url", f"patent_{i+1}"),
+                    "title": patent.get("title", f"Google Patent {i+1}"),
+                    "summary": summary,
+                    "full_content": patent.get("description", patent.get("abstract", "")),
+                    "keywords": keywords,
+                    "companies": companies,
+                    "embedding": embedding,
+                    "publish_date": patent.get("filing_date", patent.get("publication_date", datetime.now().year)),
+                    "authors": patent.get("inventors", ["Unknown Inventor"]),
+                    "source_type": "google_patent",
+                    "source_keyword": keyword,
+                    "search_time": datetime.now().isoformat(),
+                    "article_index": len(scholar_papers) + i + 1
+                }
+                
+                all_sources.append(patent_obj)
+                print(f"   🔬 Processed Patent {i+1}: {patent_obj['title'][:50]}...")
+                
+            except Exception as e:
+                print(f"   ❌ Error processing Patent {i+1}: {e}")
+                continue
+        
+        # Add all sources to global articles list
+        articles.extend(all_sources)
+        print(f"📈 Added {len(all_sources)} sources to global articles list")
+        
+        # Save to persistent storage
+        persistent_storage.save_articles(articles)
+        print(f"💾 Saved {len(articles)} total articles to persistent storage")
+        
+        # Run thesis matching analysis
+        print("🔄 Running thesis matching analysis on new sources...")
+        matches = find_relevant_articles(articles)
+        print(f"   Found {len(matches)} potential matches")
+        
+        # Track this keyword search for history
+        keyword_search = {
+            "id": f"keyword_{len(blog_searches)}_{int(time.time())}",
+            "keyword": keyword,
+            "search_time": datetime.now().isoformat(),
+            "scholar_papers_found": len(scholar_papers),
+            "patents_found": len(patent_results),
+            "total_sources": total_sources,
+            "processed_sources": len(all_sources),
+            "is_starred": False,
+            "last_monitored": datetime.now().isoformat(),
+            "search_type": "keyword_search"
+        }
+        blog_searches.append(keyword_search)
+        
+        # Save keyword searches to persistent storage
+        persistent_storage.save_blog_searches(blog_searches)
+        print(f"💾 Saved keyword search to history")
+        
+        # Return results
+        return {
+            "message": f"Keyword search completed: {len(all_sources)} sources processed",
+            "keyword": keyword,
+            "scholar_papers_found": len(scholar_papers),
+            "patents_found": len(patent_results),
+            "total_sources": total_sources,
+            "processed_sources": len(all_sources),
+            "sources": [
+                {
+                    "url": source["url"],
+                    "title": source["title"],
+                    "summary": source["summary"],
+                    "keywords": source["keywords"],
+                    "companies": source["companies"],
+                    "source_type": source["source_type"],
+                    "article_index": source["article_index"]
+                }
+                for source in all_sources
+            ],
+            "matches_found": len(matches),
+            "status": "search_completed"
+        }
+        
+    except Exception as e:
+        print(f"❌ Keyword search error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error in keyword search: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
