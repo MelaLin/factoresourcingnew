@@ -765,6 +765,14 @@ async def upload_blog(request: BlogUploadRequest):
                 print(f"   📝 Summary length: {len(summary)} chars")
                 print(f"   🏢 Companies found: {companies}")
                 
+                # Save to persistent storage after each article
+                persistent_storage.save_articles(articles)
+                print(f"   💾 Saved {len(articles)} articles to persistent storage")
+                
+                # Save to persistent storage after each article
+                persistent_storage.save_articles(articles)
+                print(f"   💾 Saved {len(articles)} articles to persistent storage")
+                
             except Exception as e:
                 print(f"   ❌ Error processing article {article_url}: {e}")
                 import traceback
@@ -797,6 +805,10 @@ async def upload_blog(request: BlogUploadRequest):
         print(f"📝 Blog search tracked for history: {blog_search['id']}")
         print(f"📊 Current blog_searches count: {len(blog_searches)}")
         print(f"📊 Current articles count: {len(articles)}")
+        
+        # Save blog searches to persistent storage
+        persistent_storage.save_blog_searches(blog_searches)
+        print(f"💾 Saved {len(blog_searches)} blog searches to persistent storage")
         
         # Verify the blog search was added
         if blog_search in blog_searches:
@@ -955,6 +967,10 @@ async def star_blog(blog_id: str):
             # Remove from starred blogs
             starred_blogs[:] = [blog for blog in starred_blogs if blog['id'] != blog_id]
             print(f"⭐ Blog unstarred: {blog_search['url']}")
+        
+        # Save blog searches to persistent storage
+        persistent_storage.save_blog_searches(blog_searches)
+        print(f"💾 Saved {len(blog_searches)} blog searches to persistent storage")
         
         return {
             "message": f"Blog {'starred' if blog_search['is_starred'] else 'unstarred'} successfully",

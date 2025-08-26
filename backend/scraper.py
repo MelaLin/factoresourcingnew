@@ -235,7 +235,7 @@ async def discover_articles_from_blog(blog_url: str) -> List[str]:
         
         # Enhanced article link patterns for modern blogs
         article_patterns = [
-            # TechCrunch specific patterns
+            # TechCrunch specific patterns (enhanced)
             'h3 a[href]',  # TechCrunch uses h3 for article titles
             'h2 a[href]',  # Common for article titles
             'h1 a[href]',  # Main headlines
@@ -247,6 +247,12 @@ async def discover_articles_from_blog(blog_url: str) -> List[str]:
             '.article-title a[href]',
             '.news-title a[href]',
             '.blog-title a[href]',
+            # TechCrunch specific selectors
+            'a[href*="/2025/"]',  # TechCrunch year-based URLs
+            'a[href*="/2024/"]',
+            'a[href*="/2023/"]',
+            'a[href*="/tag/"]',   # Tag pages
+            'a[href*="/author/"]', # Author pages
             # Generic article selectors
             'article a[href]',
             '.post a[href]',
