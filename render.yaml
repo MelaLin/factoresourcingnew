@@ -9,7 +9,7 @@ services:
       pip install -r requirements.txt
       # Copy frontend assets
       cp -r ../frontend/dist/* frontend/
-    startCommand: python -m uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: python start_render.py
     envVars:
       - key: PYTHON_VERSION
         value: 3.9.16

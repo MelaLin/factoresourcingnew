@@ -471,11 +471,46 @@ def initialize_test_data():
 # Initialize test data when module loads
 initialize_test_data()
 
+# Add startup logging for Render deployment
+print(f"🌐 Server configuration:")
+print(f"   Host: 0.0.0.0 (all interfaces)")
+print(f"   Port: {os.environ.get('PORT', '8000 (default)')}")
+print(f"   Environment: {os.environ.get('RENDER', 'local')}")
+print(f"   Python version: {os.environ.get('PYTHON_VERSION', 'unknown')}")
+print(f"   Working directory: {os.getcwd()}")
+print(f"   Frontend path: {os.path.join(os.getcwd(), 'frontend')}")
+print(f"   Frontend exists: {os.path.exists('frontend')}")
+if os.path.exists('frontend'):
+    print(f"   Frontend contents: {os.listdir('frontend')}")
+
 # Example API route
 @app.get("/api/hello")
 async def hello():
     """Example API endpoint"""
     return {"message": "Hello from FactorESourcing API!", "status": "healthy"}
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint for Render"""
+    try:
+        return {
+            "status": "healthy",
+            "timestamp": datetime.now().isoformat(),
+            "environment": os.environ.get("RENDER", "local"),
+            "port": os.environ.get("PORT", "8000"),
+            "python_version": os.environ.get("PYTHON_VERSION", "unknown"),
+            "working_directory": os.getcwd(),
+            "frontend_exists": os.path.exists("frontend"),
+            "articles_count": len(articles),
+            "thesis_count": len(thesis_uploads),
+            "blog_searches_count": len(blog_searches)
+        }
+    except Exception as e:
+        return {
+            "status": "unhealthy",
+            "error": str(e),
+            "timestamp": datetime.now().isoformat()
+        }
 
 @app.get("/api/debug/thesis")
 async def debug_thesis():
@@ -1642,16 +1677,57 @@ async def populate_test_data():
 @app.get("/")
 async def serve_frontend():
     """Serve the main frontend page"""
-    return FileResponse("frontend/index.html")
+    try:
+        # Check if we're in production (Render) or local development
+        if os.path.exists("frontend/index.html"):
+            # Production: frontend files are in backend/frontend/
+            print(f"✅ Serving frontend from: frontend/index.html")
+            return FileResponse("frontend/index.html")
+        elif os.path.exists("../frontend/dist/index.html"):
+            # Local development: frontend files are in ../frontend/dist/
+            print(f"✅ Serving frontend from: ../frontend/dist/index.html")
+            return FileResponse("../frontend/dist/index.html")
+        else:
+            # Fallback: return a simple message
+            print(f"⚠️  Frontend not found in expected locations")
+            print(f"   Current directory: {os.getcwd()}")
+            print(f"   Available files: {os.listdir('.')}")
+            if os.path.exists("frontend"):
+                print(f"   Frontend directory contents: {os.listdir('frontend')}")
+            return {"message": "FactorESourcing API is running", "frontend": "not found", "debug_info": {
+                "current_dir": os.getcwd(),
+                "available_files": os.listdir("."),
+                "frontend_exists": os.path.exists("frontend")
+            }}
+    except Exception as e:
+        print(f"❌ Error serving frontend: {e}")
+        return {"error": f"Error serving frontend: {str(e)}"}
 
 @app.get("/assets/{file_path:path}")
 async def serve_assets(file_path: str):
     """Serve frontend assets (CSS, JS, images)"""
-    asset_path = f"frontend/assets/{file_path}"
-    if os.path.exists(asset_path):
-        return FileResponse(asset_path)
-    else:
-        raise HTTPException(status_code=404, detail="Asset not found")
+    try:
+        # Try production path first
+        asset_path = f"frontend/assets/{file_path}"
+        if os.path.exists(asset_path):
+            print(f"✅ Serving asset: {asset_path}")
+            return FileResponse(asset_path)
+        
+        # Try local development path
+        dev_asset_path = f"../frontend/dist/assets/{file_path}"
+        if os.path.exists(dev_asset_path):
+            print(f"✅ Serving asset from dev: {dev_asset_path}")
+            return FileResponse(dev_asset_path)
+        
+        # Asset not found
+        print(f"❌ Asset not found: {file_path}")
+        print(f"   Tried: {asset_path}")
+        print(f"   Tried: {dev_asset_path}")
+        raise HTTPException(status_code=404, detail=f"Asset not found: {file_path}")
+        
+    except Exception as e:
+        print(f"❌ Error serving asset {file_path}: {e}")
+        raise HTTPException(status_code=500, detail=f"Error serving asset: {str(e)}")
 
 # Catch-all route for frontend routes (SPA routing)
 @app.get("/{full_path:path}")
@@ -1666,5 +1742,7 @@ async def catch_all_routes(full_path: str):
 
 if __name__ == "__main__":
     import uvicorn
-    print("🚀 Starting FactorESourcing API server...")
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Use PORT environment variable or default to 8000
+    port = int(os.environ.get("PORT", 8000))
+    print(f"🚀 Starting FactorESourcing API server on port {port}...")
+    uvicorn.run(app, host="0.0.0.0", port=port)
