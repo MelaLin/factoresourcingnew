@@ -553,6 +553,47 @@ async def debug_thesis():
         print(f"❌ Error in debug thesis: {e}")
         return {"error": str(e)}
 
+@app.get("/api/debug/blogs")
+async def debug_blogs():
+    """Debug endpoint to check blog data"""
+    try:
+        print(f"🔍 Debug blog data requested")
+        print(f"   Blog searches count: {len(blog_searches)}")
+        print(f"   Articles count: {len(articles)}")
+        
+        # Show blog searches
+        print(f"   📚 Blog searches:")
+        for i, blog in enumerate(blog_searches):
+            print(f"      Blog {i+1}:")
+            print(f"         ID: {blog.get('id', 'No ID')}")
+            print(f"         URL: {blog.get('url', 'No URL')}")
+            print(f"         Total articles: {blog.get('total_articles_found', 0)}")
+            print(f"         Processed: {blog.get('processed_articles', 0)}")
+            print(f"         Starred: {blog.get('is_starred', False)}")
+            print(f"         Search time: {blog.get('search_time', 'No time')}")
+            print(f"         ---")
+        
+        # Show articles from blogs
+        blog_articles = [a for a in articles if a.get('source_blog')]
+        print(f"   📰 Articles from blogs: {len(blog_articles)}")
+        for i, article in enumerate(blog_articles[:5]):  # Show first 5
+            print(f"      Article {i+1}:")
+            print(f"         Title: {article.get('title', 'No title')}")
+            print(f"         URL: {article.get('url', 'No URL')}")
+            print(f"         Source blog: {article.get('source_blog', 'No source')}")
+            print(f"         ---")
+        
+        return {
+            "blog_searches_count": len(blog_searches),
+            "articles_count": len(articles),
+            "blog_articles_count": len(blog_articles),
+            "blog_searches": blog_searches,
+            "blog_articles_sample": blog_articles[:5] if blog_articles else []
+        }
+    except Exception as e:
+        print(f"❌ Error in debug blogs: {e}")
+        return {"error": str(e)}
+
 @app.post("/api/sources", response_model=SourceResponse)
 async def add_source(request: SourceRequest):
     """Add new content source"""
@@ -845,11 +886,20 @@ async def upload_blog(request: BlogUploadRequest):
         persistent_storage.save_blog_searches(blog_searches)
         print(f"💾 Saved {len(blog_searches)} blog searches to persistent storage")
         
+        # Save articles to persistent storage
+        persistent_storage.save_articles(articles)
+        print(f"💾 Saved {len(articles)} articles to persistent storage")
+        
         # Verify the blog search was added
         if blog_search in blog_searches:
             print(f"✅ Blog search successfully added to tracking")
         else:
             print(f"❌ Blog search was NOT added to tracking!")
+        
+        # Debug: Print all blog searches
+        print(f"🔍 All blog searches after adding:")
+        for i, blog in enumerate(blog_searches):
+            print(f"   {i+1}. ID: {blog['id']}, URL: {blog['url']}, Starred: {blog.get('is_starred', False)}")
         
         return BlogUploadResponse(
             message=f"Successfully processed {successful_count} out of {total_articles} articles",
@@ -1466,7 +1516,9 @@ async def get_history():
             })
         
         # Add blog searches (for tracking blog monitoring)
-        for blog in blog_searches:
+        print(f"   📚 Processing {len(blog_searches)} blog searches...")
+        for i, blog in enumerate(blog_searches):
+            print(f"      Blog {i+1}: {blog['url']} (ID: {blog['id']}, Starred: {blog.get('is_starred', False)})")
             history_items.append({
                 "id": blog["id"],
                 "type": "blog_search",

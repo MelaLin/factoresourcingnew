@@ -14,7 +14,8 @@ import {
   RotateCcw, 
   CheckCircle,
   AlertCircle,
-  RefreshCw
+  RefreshCw,
+  Star
 } from 'lucide-react';
 
 interface BlogRevision {
@@ -91,7 +92,7 @@ export const Revisions = () => {
               search_time: item.timestamp,
               total_articles_found: item.total_articles || 0,
               processed_articles: item.processed_articles || 0,
-              is_active: !item.is_starred, // Inactive if starred (removed)
+              is_active: true, // All blogs are active by default
               removed_articles: []
             });
           } else if (item.type === 'thesis') {
@@ -213,6 +214,28 @@ export const Revisions = () => {
     } catch (err) {
       console.error('❌ Error removing article:', err);
       setError('Failed to remove article');
+    }
+  };
+
+  const starBlog = async (blogId: string) => {
+    try {
+      // Call backend to star/unstar the blog
+      const response = await fetch(`${API_BASE_URL}/api/blogs/star/${blogId}`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`⭐ Blog ${blogId} starred/unstarred:`, result);
+        
+        // Refresh revisions to get updated star status
+        fetchRevisions();
+      } else {
+        throw new Error('Failed to star blog');
+      }
+    } catch (err) {
+      console.error('❌ Error starring blog:', err);
+      setError('Failed to star blog');
     }
   };
 
@@ -469,6 +492,14 @@ export const Revisions = () => {
                     </div>
                     
                     <div className="flex items-center gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => starBlog(blog.id)}
+                        className="text-yellow-600 hover:bg-yellow-50"
+                      >
+                        <Star className="h-4 w-4" />
+                      </Button>
                       <Button
                         variant="outline"
                         size="sm"
