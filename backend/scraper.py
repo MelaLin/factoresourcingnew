@@ -1,4 +1,12 @@
-from newspaper import Article
+# Try to import newspaper, fallback to basic scraping if it fails
+try:
+    from newspaper import Article
+    NEWSPAPER_AVAILABLE = True
+    print("✅ Newspaper3k available for advanced scraping")
+except ImportError as e:
+    NEWSPAPER_AVAILABLE = False
+    print(f"⚠️  Newspaper3k not available, using basic scraping: {e}")
+
 import re
 import asyncio
 import aiohttp
@@ -7,6 +15,7 @@ from bs4 import BeautifulSoup
 from urllib.parse import urljoin, urlparse
 from typing import Dict, List, Tuple, Any
 from ai_utils import generate_title_from_url, extract_companies_from_url, extract_companies
+from datetime import datetime
 
 def extract_company_names(text: str) -> List[str]:
     """Extract potential company names from text"""
@@ -104,64 +113,112 @@ def scrape_url(url: str) -> Dict[str, Any]:
             html = asyncio.run(_fetch_with_headers())
             if html:
                 print(f"✅ Successfully fetched content with enhanced headers ({len(html)} characters)")
-                # Use newspaper to parse the HTML
-                article = Article(url)
-                article.download()
-                article.parse()
-            else:
-                print(f"⚠️  Enhanced headers failed, falling back to newspaper")
-                article = Article(url)
-                article.download()
-                article.parse()
-        except Exception as e:
-            print(f"⚠️  Enhanced headers failed: {e}, falling back to newspaper")
-            article = Article(url)
-            article.download()
-            article.parse()
-        
-        # Extract company names from the text using improved AI-based extraction
-        companies = extract_companies(article.text)
-        
-        # Get the title, fallback to generated title if no title
-        title = article.title if article.title else generate_title_from_url(url)
-        
-        # If no companies found, use URL-based extraction as fallback
-        if not companies:
-            print(f"⚠️  No companies found with AI extraction, using URL-based extraction for {url}")
-            companies = extract_companies_from_url(url)
-        
-        # Get publish date with better formatting
-        publish_date = None
-        if article.publish_date:
-            try:
-                # Format date more nicely
-                if hasattr(article.publish_date, 'strftime'):
-                    publish_date = article.publish_date.strftime("%B %d, %Y")
+                
+                # Parse HTML with BeautifulSoup instead of newspaper
+                soup = BeautifulSoup(html, 'html.parser')
+                
+                # Extract title
+                title_tag = soup.find('title')
+                title = title_tag.get_text().strip() if title_tag else generate_title_from_url(url)
+                
+                # Extract main content
+                content_selectors = [
+                    'article', 'main', '.content', '.post-content', '.entry-content', 
+                    '.article-content', '.story-content', '.post-body', '.entry-body',
+                    '.post', '.story', '.article', '.entry', '.content-area',
+                    '[role="main"]', '.main-content', '.story-body', '.article-body'
+                ]
+                
+                main_content = None
+                for selector in content_selectors:
+                    main_content = soup.select_one(selector)
+                    if main_content:
+                        break
+                
+                if not main_content:
+                    main_content = soup.find('body')
+                
+                if main_content:
+                    # Clean and extract text
+                    for tag in main_content(['script', 'style', 'nav', 'header', 'footer', 'aside']):
+                        tag.decompose()
+                    
+                    text_content = main_content.get_text(separator='\n', strip=True)
+                    text_content = re.sub(r'\n\s*\n', '\n\n', text_content)
+                    text_content = re.sub(r'\s+', ' ', text_content)
                 else:
-                    publish_date = str(article.publish_date)
-            except:
+                    text_content = f"Content from {url}"
+                
+                # Extract companies from text
+                companies = extract_companies(text_content)
+                
+                # Get publish date
                 publish_date = "Unknown"
+                date_selectors = [
+                    'time[datetime]', '.publish-date', '.post-date', '.entry-date', 
+                    '.article-date', '.story-date', 'meta[property="article:published_time"]'
+                ]
+                
+                for selector in date_selectors:
+                    date_elem = soup.select_one(selector)
+                    if date_elem:
+                        if selector == 'meta[property="article:published_time"]':
+                            publish_date = date_elem.get('content')
+                        else:
+                            publish_date = date_elem.get('datetime') or date_elem.get('text')
+                        break
+                
+                # Get authors
+                authors = ["Unknown Author"]
+                author_selectors = [
+                    '.author', '.byline', '.post-author', '.entry-author', 
+                    '.article-author', '.story-author', 'meta[name="author"]'
+                ]
+                
+                for selector in author_selectors:
+                    author_elem = soup.select_one(selector)
+                    if author_elem:
+                        if selector == 'meta[name="author"]':
+                            authors = [author_elem.get('content')]
+                        else:
+                            authors = [author_elem.get_text().strip()]
+                        break
+                
+                return {
+                    "text": text_content,
+                    "title": title,
+                    "companies": companies,
+                    "url": url,
+                    "publish_date": publish_date,
+                    "authors": authors,
+                    "top_image": None
+                }
+            else:
+                print(f"⚠️  Enhanced headers failed, using fallback")
+                return {
+                    "text": f"Content from {url}",
+                    "url": url,
+                    "title": generate_title_from_url(url),
+                    "companies": extract_companies_from_url(url),
+                    "publish_date": "Unknown",
+                    "authors": ["Unknown Author"],
+                    "top_image": None
+                }
+        except Exception as e:
+            print(f"⚠️  Enhanced headers failed: {e}, using fallback")
+            return {
+                "text": f"Content from {url}",
+                "url": url,
+                "title": generate_title_from_url(url),
+                "companies": extract_companies_from_url(url),
+                "publish_date": "Unknown",
+                "authors": ["Unknown Author"],
+                "top_image": None
+            }
         
-        # Get authors
-        authors = article.authors if article.authors else ["Unknown Author"]
-        
-        # Get top image
-        top_image = article.top_image if article.top_image else None
-        
-        print(f"Successfully scraped: {title} from {url}")
-        print(f"  Text length: {len(article.text)} characters")
-        print(f"  Companies found: {companies}")
-        print(f"  Date: {publish_date}")
-        
-        return {
-            "text": article.text,
-            "title": title,
-            "companies": companies,
-            "url": url,
-            "publish_date": publish_date,
-            "authors": authors,
-            "top_image": top_image
-        }
+        # The function now returns data from the BeautifulSoup parsing above
+        # This section is no longer needed
+        pass
     except Exception as e:
         print(f"Error scraping {url}: {e}")
         # Return fallback data with generated content
@@ -776,6 +833,691 @@ async def search_google_patents_direct(keyword: str, max_results: int = 10) -> L
         return []
 
 
+
+def fallback_scrape_blog_articles(blog_url: str, max_articles: int = 50) -> List[Dict[str, Any]]:
+    """
+    Fallback scraping function for blogs containing many articles.
+    This function provides multiple fallback strategies when primary scraping fails.
+    """
+    try:
+        print(f"🔄 Starting fallback scraping for blog: {blog_url}")
+        print(f"   Target: Up to {max_articles} articles")
+        
+        # Strategy 1: Try newspaper3k if available
+        if NEWSPAPER_AVAILABLE:
+            print("   📰 Strategy 1: Attempting newspaper3k extraction...")
+            try:
+                from newspaper import build
+                news_site = build(blog_url, memoize_articles=False)
+                news_site.download()
+                news_site.parse()
+                
+                if news_site.articles:
+                    print(f"   ✅ Newspaper3k found {len(news_site.articles)} articles")
+                    articles = []
+                    
+                    for i, article in enumerate(news_site.articles[:max_articles]):
+                        try:
+                            # Download and parse individual article
+                            article.download()
+                            article.parse()
+                            
+                            if article.text and len(article.text) > 100:
+                                article_data = {
+                                    "url": article.url or f"{blog_url}/article_{i+1}",
+                                    "title": article.title or f"Article {i+1} from {blog_url}",
+                                    "text": article.text,
+                                    "publish_date": article.publish_date.isoformat() if article.publish_date else None,
+                                    "authors": article.authors or ["Unknown Author"],
+                                    "companies": extract_company_names(article.text),
+                                    "top_image": article.top_image,
+                                    "scraping_method": "newspaper3k"
+                                }
+                                articles.append(article_data)
+                                print(f"     ✅ Processed article {i+1}: {article_data['title'][:50]}...")
+                            
+                        except Exception as e:
+                            print(f"     ⚠️  Error processing article {i+1}: {e}")
+                            continue
+                    
+                    if articles:
+                        print(f"   🎯 Newspaper3k strategy successful: {len(articles)} articles")
+                        return articles
+                    else:
+                        print("   ⚠️  Newspaper3k found articles but couldn't process them")
+                else:
+                    print("   ⚠️  Newspaper3k found no articles")
+                    
+            except Exception as e:
+                print(f"   ❌ Newspaper3k strategy failed: {e}")
+        
+        # Strategy 2: Enhanced BeautifulSoup with multiple selectors
+        print("   🔍 Strategy 2: Enhanced BeautifulSoup extraction...")
+        try:
+            import aiohttp
+            import asyncio
+            
+            async def _fetch_with_enhanced_bs():
+                # Enhanced headers for better compatibility
+                headers = {
+                    'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+                    'Accept-Language': 'en-US,en;q=0.9',
+                    'Accept-Encoding': 'gzip, deflate, br',
+                    'DNT': '1',
+                    'Connection': 'keep-alive',
+                    'Upgrade-Insecure-Requests': '1',
+                    'Sec-Fetch-Dest': 'document',
+                    'Sec-Fetch-Mode': 'navigate',
+                    'Sec-Fetch-Site': 'none',
+                    'Cache-Control': 'max-age=0'
+                }
+                
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                
+                timeout = aiohttp.ClientTimeout(total=30, connect=10)
+                
+                async with aiohttp.ClientSession(
+                    headers=headers, 
+                    timeout=timeout,
+                    connector=aiohttp.TCPConnector(ssl=ssl_context)
+                ) as session:
+                    async with session.get(blog_url) as response:
+                        if response.status != 200:
+                            print(f"     ❌ HTTP {response.status} for {blog_url}")
+                            return None
+                        return await response.text()
+            
+            # Run the async function
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            html_content = loop.run_until_complete(_fetch_with_enhanced_bs())
+            loop.close()
+            
+            if html_content:
+                print(f"     ✅ Successfully fetched HTML ({len(html_content)} characters)")
+                
+                # Parse with BeautifulSoup
+                soup = BeautifulSoup(html_content, 'html.parser')
+                
+                # Comprehensive article detection patterns
+                article_patterns = [
+                    # Modern blog patterns
+                    'article', '.post', '.article', '.entry', '.story', '.news',
+                    '.blog-post', '.content-item', '.research-item', '.insight-item',
+                    # Header patterns
+                    'h1', 'h2', 'h3', 'h4',
+                    # Link patterns
+                    'a[href*="/article/"]', 'a[href*="/post/"]', 'a[href*="/news/"]',
+                    'a[href*="/story/"]', 'a[href*="/blog/"]', 'a[href*="/research/"]',
+                    'a[href*="/insights/"]', 'a[href*="/reports/"]', 'a[href*="/analysis/"]',
+                    # Year-based patterns
+                    'a[href*="/2025/"]', 'a[href*="/2024/"]', 'a[href*="/2023/"]',
+                    'a[href*="/2022/"]', 'a[href*="/2021/"]',
+                    # Generic content patterns
+                    '.content', '.main-content', '.post-content', '.article-content'
+                ]
+                
+                articles = []
+                processed_urls = set()
+                
+                for pattern in article_patterns:
+                    if len(articles) >= max_articles:
+                        break
+                        
+                    elements = soup.select(pattern)
+                    print(f"       Pattern '{pattern}': Found {len(elements)} elements")
+                    
+                    for element in elements:
+                        if len(articles) >= max_articles:
+                            break
+                            
+                        try:
+                            # Extract article data based on element type
+                            if pattern.startswith('a[href'):
+                                # Link-based extraction
+                                href = element.get('href')
+                                if href and href not in processed_urls:
+                                    full_url = urljoin(blog_url, href)
+                                    if is_likely_article_url(full_url, blog_url):
+                                        # Try to extract title and content
+                                        title = element.get_text(strip=True) or f"Article from {full_url}"
+                                        
+                                        article_data = {
+                                            "url": full_url,
+                                            "title": title,
+                                            "text": f"Content from {title}. Visit {full_url} for full article.",
+                                            "publish_date": None,
+                                            "authors": ["Unknown Author"],
+                                            "companies": [],
+                                            "top_image": None,
+                                            "scraping_method": "beautifulsoup_links"
+                                        }
+                                        articles.append(article_data)
+                                        processed_urls.add(href)
+                                        print(f"         ✅ Added link-based article: {title[:50]}...")
+                            
+                            elif pattern in ['article', '.post', '.article', '.entry', '.story', '.news']:
+                                # Content-based extraction
+                                title_elem = element.find(['h1', 'h2', 'h3', 'h4', '.title', '.headline'])
+                                title = title_elem.get_text(strip=True) if title_elem else f"Article {len(articles)+1}"
+                                
+                                # Extract text content
+                                text_content = ""
+                                for text_elem in element.find_all(['p', 'div', 'span']):
+                                    text = text_elem.get_text(strip=True)
+                                    if len(text) > 20:  # Only meaningful text
+                                        text_content += text + " "
+                                
+                                if text_content and len(text_content) > 100:
+                                    article_data = {
+                                        "url": f"{blog_url}/article_{len(articles)+1}",
+                                        "title": title,
+                                        "text": text_content[:2000],  # Limit text length
+                                        "publish_date": None,
+                                        "authors": ["Unknown Author"],
+                                        "companies": extract_company_names(text_content),
+                                        "top_image": None,
+                                        "scraping_method": "beautifulsoup_content"
+                                    }
+                                    articles.append(article_data)
+                                    print(f"         ✅ Added content-based article: {title[:50]}...")
+                        
+                        except Exception as e:
+                            print(f"         ⚠️  Error processing element: {e}")
+                            continue
+                
+                if articles:
+                    print(f"     🎯 BeautifulSoup strategy successful: {len(articles)} articles")
+                    return articles
+                else:
+                    print("     ⚠️  BeautifulSoup found no articles")
+            else:
+                print("     ❌ Failed to fetch HTML content")
+                
+        except Exception as e:
+            print(f"   ❌ BeautifulSoup strategy failed: {e}")
+        
+        # Strategy 3: RSS Feed detection and parsing
+        print("   📡 Strategy 3: RSS Feed detection...")
+        try:
+            rss_urls = [
+                f"{blog_url}/feed",
+                f"{blog_url}/rss",
+                f"{blog_url}/rss.xml",
+                f"{blog_url}/feed.xml",
+                f"{blog_url}/atom.xml",
+                f"{blog_url}/rss/",
+                f"{blog_url}/feed/"
+            ]
+            
+            for rss_url in rss_urls:
+                try:
+                    import aiohttp
+                    import asyncio
+                    
+                    async def _fetch_rss():
+                        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                        ssl_context = ssl.create_default_context()
+                        ssl_context.check_hostname = False
+                        ssl_context.verify_mode = ssl.CERT_NONE
+                        
+                        timeout = aiohttp.ClientTimeout(total=15, connect=5)
+                        
+                        async with aiohttp.ClientSession(
+                            headers=headers, 
+                            timeout=timeout,
+                            connector=aiohttp.TCPConnector(ssl=ssl_context)
+                        ) as session:
+                            async with session.get(rss_url) as response:
+                                if response.status == 200:
+                                    return await response.text()
+                                return None
+                    
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    rss_content = loop.run_until_complete(_fetch_rss())
+                    loop.close()
+                    
+                    if rss_content and ('<rss' in rss_content or '<feed' in rss_content):
+                        print(f"     ✅ Found RSS feed: {rss_url}")
+                        
+                        # Parse RSS content
+                        soup = BeautifulSoup(rss_content, 'xml')
+                        items = soup.find_all(['item', 'entry'])
+                        
+                        if items:
+                            articles = []
+                            for i, item in enumerate(items[:max_articles]):
+                                try:
+                                    title = item.find(['title', 'name'])
+                                    title_text = title.get_text(strip=True) if title else f"RSS Article {i+1}"
+                                    
+                                    link = item.find(['link', 'url'])
+                                    link_url = link.get('href') if link else f"{blog_url}/rss_article_{i+1}"
+                                    
+                                    description = item.find(['description', 'summary', 'content'])
+                                    desc_text = description.get_text(strip=True) if description else f"Content from {title_text}"
+                                    
+                                    pub_date = item.find(['pubDate', 'published', 'updated'])
+                                    date_text = pub_date.get_text(strip=True) if pub_date else None
+                                    
+                                    article_data = {
+                                        "url": link_url,
+                                        "title": title_text,
+                                        "text": desc_text,
+                                        "publish_date": date_text,
+                                        "authors": ["Unknown Author"],
+                                        "companies": extract_company_names(desc_text),
+                                        "top_image": None,
+                                        "scraping_method": "rss_feed"
+                                    }
+                                    articles.append(article_data)
+                                    
+                                except Exception as e:
+                                    print(f"         ⚠️  Error processing RSS item {i+1}: {e}")
+                                    continue
+                            
+                            if articles:
+                                print(f"     🎯 RSS strategy successful: {len(articles)} articles")
+                                return articles
+                            else:
+                                print("     ⚠️  RSS found items but couldn't process them")
+                        
+                        break  # Found RSS feed, no need to check others
+                        
+                except Exception as e:
+                    print(f"     ⚠️  Error checking RSS {rss_url}: {e}")
+                    continue
+            
+            print("     ⚠️  No RSS feeds found")
+            
+        except Exception as e:
+            print(f"   ❌ RSS strategy failed: {e}")
+        
+        # Strategy 4: Sitemap detection and parsing
+        print("   🗺️  Strategy 4: Sitemap detection...")
+        try:
+            sitemap_urls = [
+                f"{blog_url}/sitemap.xml",
+                f"{blog_url}/sitemap_index.xml",
+                f"{blog_url}/sitemap-posts.xml",
+                f"{blog_url}/sitemap-articles.xml",
+                f"{blog_url}/sitemap/",
+                f"{blog_url}/sitemap.xml.gz"
+            ]
+            
+            for sitemap_url in sitemap_urls:
+                try:
+                    import aiohttp
+                    import asyncio
+                    
+                    async def _fetch_sitemap():
+                        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                        ssl_context = ssl.create_default_context()
+                        ssl_context.check_hostname = False
+                        ssl_context.verify_mode = ssl.CERT_NONE
+                        
+                        timeout = aiohttp.ClientTimeout(total=15, connect=5)
+                        
+                        async with aiohttp.ClientSession(
+                            headers=headers, 
+                            timeout=timeout,
+                            connector=aiohttp.TCPConnector(ssl=ssl_context)
+                        ) as session:
+                            async with session.get(sitemap_url) as response:
+                                if response.status == 200:
+                                    return await response.text()
+                                return None
+                    
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    sitemap_content = loop.run_until_complete(_fetch_sitemap())
+                    loop.close()
+                    
+                    if sitemap_content and ('<urlset' in sitemap_content or '<sitemapindex' in sitemap_content):
+                        print(f"     ✅ Found sitemap: {sitemap_url}")
+                        
+                        # Parse sitemap content
+                        soup = BeautifulSoup(sitemap_content, 'xml')
+                        urls = soup.find_all('url')
+                        
+                        if urls:
+                            articles = []
+                            for i, url_elem in enumerate(urls[:max_articles]):
+                                try:
+                                    loc = url_elem.find('loc')
+                                    if loc:
+                                        url = loc.get_text(strip=True)
+                                        if is_likely_article_url(url, blog_url):
+                                            title = f"Sitemap Article {i+1}"
+                                            
+                                            article_data = {
+                                                "url": url,
+                                                "title": title,
+                                                "text": f"Article found via sitemap: {url}",
+                                                "publish_date": None,
+                                                "authors": ["Unknown Author"],
+                                                "companies": [],
+                                                "top_image": None,
+                                                "scraping_method": "sitemap"
+                                            }
+                                            articles.append(article_data)
+                                    
+                                except Exception as e:
+                                    print(f"         ⚠️  Error processing sitemap URL {i+1}: {e}")
+                                    continue
+                            
+                            if articles:
+                                print(f"     🎯 Sitemap strategy successful: {len(articles)} articles")
+                                return articles
+                            else:
+                                print("     ⚠️  Sitemap found URLs but couldn't process them")
+                        
+                        break  # Found sitemap, no need to check others
+                        
+                except Exception as e:
+                    print(f"     ⚠️  Error checking sitemap {sitemap_url}: {e}")
+                    continue
+            
+            print("     ⚠️  No sitemaps found")
+            
+        except Exception as e:
+            print(f"   ❌ Sitemap strategy failed: {e}")
+        
+        # Strategy 5: Last resort - generate placeholder articles
+        print("   🆘 Strategy 5: Generating placeholder articles...")
+        try:
+            articles = []
+            for i in range(min(5, max_articles)):  # Limit to 5 placeholder articles
+                article_data = {
+                    "url": f"{blog_url}/fallback_article_{i+1}",
+                    "title": f"Fallback Article {i+1} from {blog_url}",
+                    "text": f"This is a fallback article generated when scraping failed. The original blog at {blog_url} could not be processed using standard methods. Consider manually submitting individual article URLs or checking if the site has changed its structure.",
+                    "publish_date": None,
+                    "authors": ["System Generated"],
+                    "companies": [],
+                    "top_image": None,
+                    "scraping_method": "fallback_placeholder"
+                }
+                articles.append(article_data)
+            
+            print(f"     🎯 Generated {len(articles)} placeholder articles")
+            return articles
+            
+        except Exception as e:
+            print(f"   ❌ Placeholder strategy failed: {e}")
+        
+        print("   ❌ All fallback strategies failed")
+        return []
+        
+    except Exception as e:
+        print(f"❌ Critical error in fallback scraping: {e}")
+        import traceback
+        traceback.print_exc()
+        return []
+
+def test_fallback_scraping(blog_url: str) -> Dict[str, Any]:
+    """
+    Test function to evaluate fallback scraping capabilities for a given blog URL.
+    This helps diagnose what strategies work for different types of blogs.
+    """
+    try:
+        print(f"🧪 Testing fallback scraping for: {blog_url}")
+        results = {
+            "url": blog_url,
+            "test_time": datetime.now().isoformat(),
+            "strategies_tested": [],
+            "successful_strategies": [],
+            "total_articles_found": 0,
+            "articles_per_strategy": {},
+            "recommendations": []
+        }
+        
+        # Test Strategy 1: Newspaper3k
+        if NEWSPAPER_AVAILABLE:
+            print("   📰 Testing Strategy 1: Newspaper3k...")
+            try:
+                from newspaper import build
+                news_site = build(blog_url, memoize_articles=False)
+                news_site.download()
+                news_site.parse()
+                
+                if news_site.articles:
+                    results["strategies_tested"].append("newspaper3k")
+                    results["articles_per_strategy"]["newspaper3k"] = len(news_site.articles)
+                    results["successful_strategies"].append("newspaper3k")
+                    print(f"     ✅ Newspaper3k: {len(news_site.articles)} articles")
+                else:
+                    results["strategies_tested"].append("newspaper3k")
+                    results["articles_per_strategy"]["newspaper3k"] = 0
+                    print("     ❌ Newspaper3k: No articles found")
+            except Exception as e:
+                results["strategies_tested"].append("newspaper3k")
+                results["articles_per_strategy"]["newspaper3k"] = 0
+                print(f"     ❌ Newspaper3k: Error - {e}")
+        
+        # Test Strategy 2: BeautifulSoup
+        print("   🔍 Testing Strategy 2: BeautifulSoup...")
+        try:
+            import aiohttp
+            import asyncio
+            
+            async def _test_bs():
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                ssl_context = ssl.create_default_context()
+                ssl_context.check_hostname = False
+                ssl_context.verify_mode = ssl.CERT_NONE
+                
+                timeout = aiohttp.ClientTimeout(total=15, connect=5)
+                
+                async with aiohttp.ClientSession(
+                    headers=headers, 
+                    timeout=timeout,
+                    connector=aiohttp.TCPConnector(ssl=ssl_context)
+                ) as session:
+                    async with session.get(blog_url) as response:
+                        if response.status == 200:
+                            return await response.text()
+                        return None
+            
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            html_content = loop.run_until_complete(_test_bs())
+            loop.close()
+            
+            if html_content:
+                soup = BeautifulSoup(html_content, 'html.parser')
+                
+                # Test various selectors
+                test_selectors = [
+                    'article', '.post', '.article', '.entry', '.story', '.news',
+                    'h1', 'h2', 'h3', 'h4',
+                    'a[href*="/article/"]', 'a[href*="/post/"]', 'a[href*="/news/"]'
+                ]
+                
+                total_elements = 0
+                for selector in test_selectors:
+                    elements = soup.select(selector)
+                    total_elements += len(elements)
+                
+                results["strategies_tested"].append("beautifulsoup")
+                results["articles_per_strategy"]["beautifulsoup"] = total_elements
+                
+                if total_elements > 0:
+                    results["successful_strategies"].append("beautifulsoup")
+                    print(f"     ✅ BeautifulSoup: {total_elements} potential elements found")
+                else:
+                    print("     ❌ BeautifulSoup: No elements found")
+            else:
+                results["strategies_tested"].append("beautifulsoup")
+                results["articles_per_strategy"]["beautifulsoup"] = 0
+                print("     ❌ BeautifulSoup: Failed to fetch HTML")
+                
+        except Exception as e:
+            results["strategies_tested"].append("beautifulsoup")
+            results["articles_per_strategy"]["beautifulsoup"] = 0
+            print(f"     ❌ BeautifulSoup: Error - {e}")
+        
+        # Test Strategy 3: RSS
+        print("   📡 Testing Strategy 3: RSS...")
+        try:
+            rss_urls = [
+                f"{blog_url}/feed", f"{blog_url}/rss", f"{blog_url}/rss.xml",
+                f"{blog_url}/feed.xml", f"{blog_url}/atom.xml"
+            ]
+            
+            rss_found = False
+            for rss_url in rss_urls:
+                try:
+                    import aiohttp
+                    import asyncio
+                    
+                    async def _test_rss():
+                        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                        ssl_context = ssl.create_default_context()
+                        ssl_context.check_hostname = False
+                        ssl_context.verify_mode = ssl.CERT_NONE
+                        
+                        timeout = aiohttp.ClientTimeout(total=10, connect=3)
+                        
+                        async with aiohttp.ClientSession(
+                            headers=headers, 
+                            timeout=timeout,
+                            connector=aiohttp.TCPConnector(ssl=ssl_context)
+                        ) as session:
+                            async with session.get(rss_url) as response:
+                                if response.status == 200:
+                                    return await response.text()
+                                return None
+                    
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    rss_content = loop.run_until_complete(_test_rss())
+                    loop.close()
+                    
+                    if rss_content and ('<rss' in rss_content or '<feed' in rss_content):
+                        rss_found = True
+                        soup = BeautifulSoup(rss_content, 'xml')
+                        items = soup.find_all(['item', 'entry'])
+                        results["articles_per_strategy"]["rss"] = len(items)
+                        results["successful_strategies"].append("rss")
+                        print(f"     ✅ RSS ({rss_url}): {len(items)} items found")
+                        break
+                        
+                except Exception as e:
+                    continue
+            
+            results["strategies_tested"].append("rss")
+            if not rss_found:
+                results["articles_per_strategy"]["rss"] = 0
+                print("     ❌ RSS: No feeds found")
+                
+        except Exception as e:
+            results["strategies_tested"].append("rss")
+            results["articles_per_strategy"]["rss"] = 0
+            print(f"     ❌ RSS: Error - {e}")
+        
+        # Test Strategy 4: Sitemap
+        print("   🗺️  Testing Strategy 4: Sitemap...")
+        try:
+            sitemap_urls = [
+                f"{blog_url}/sitemap.xml", f"{blog_url}/sitemap_index.xml",
+                f"{blog_url}/sitemap-posts.xml", f"{blog_url}/sitemap-articles.xml"
+            ]
+            
+            sitemap_found = False
+            for sitemap_url in sitemap_urls:
+                try:
+                    import aiohttp
+                    import asyncio
+                    
+                    async def _test_sitemap():
+                        headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'}
+                        ssl_context = ssl.create_default_context()
+                        ssl_context.check_hostname = False
+                        ssl_context.verify_mode = ssl.CERT_NONE
+                        
+                        timeout = aiohttp.ClientTimeout(total=10, connect=3)
+                        
+                        async with aiohttp.ClientSession(
+                            headers=headers, 
+                            timeout=timeout,
+                            connector=aiohttp.TCPConnector(ssl=ssl_context)
+                        ) as session:
+                            async with session.get(sitemap_url) as response:
+                                if response.status == 200:
+                                    return await response.text()
+                                return None
+                    
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    sitemap_content = loop.run_until_complete(_test_sitemap())
+                    loop.close()
+                    
+                    if sitemap_content and ('<urlset' in sitemap_content or '<sitemapindex' in sitemap_content):
+                        sitemap_found = True
+                        soup = BeautifulSoup(sitemap_content, 'xml')
+                        urls = soup.find_all('url')
+                        results["articles_per_strategy"]["sitemap"] = len(urls)
+                        results["successful_strategies"].append("sitemap")
+                        print(f"     ✅ Sitemap ({sitemap_url}): {len(urls)} URLs found")
+                        break
+                        
+                except Exception as e:
+                    continue
+            
+            results["strategies_tested"].append("sitemap")
+            if not sitemap_found:
+                results["articles_per_strategy"]["sitemap"] = 0
+                print("     ❌ Sitemap: No sitemaps found")
+                
+        except Exception as e:
+            results["strategies_tested"].append("sitemap")
+            results["articles_per_strategy"]["sitemap"] = 0
+            print(f"     ❌ Sitemap: Error - {e}")
+        
+        # Calculate totals and generate recommendations
+        total_articles = sum(results["articles_per_strategy"].values())
+        results["total_articles_found"] = total_articles
+        
+        print(f"   📊 Test Results Summary:")
+        print(f"     Total articles found: {total_articles}")
+        print(f"     Successful strategies: {len(results['successful_strategies'])}")
+        
+        # Generate recommendations
+        if total_articles == 0:
+            results["recommendations"].append("All scraping strategies failed. Consider manual article submission.")
+            results["recommendations"].append("Check if the site has anti-scraping measures.")
+        elif total_articles < 5:
+            results["recommendations"].append("Limited content found. Consider using individual article URLs.")
+            results["recommendations"].append("Try the fallback scraping endpoint for better results.")
+        else:
+            results["recommendations"].append("Multiple strategies successful. Use fallback scraping for comprehensive results.")
+        
+        if "newspaper3k" in results["successful_strategies"]:
+            results["recommendations"].append("Newspaper3k works well for this site.")
+        if "rss" in results["successful_strategies"]:
+            results["recommendations"].append("RSS feed available - consider using it for updates.")
+        if "sitemap" in results["successful_strategies"]:
+            results["recommendations"].append("Sitemap available - good for comprehensive article discovery.")
+        
+        print(f"     💡 Recommendations: {len(results['recommendations'])} generated")
+        
+        return results
+        
+    except Exception as e:
+        print(f"❌ Critical error in test function: {e}")
+        import traceback
+        traceback.print_exc()
+        return {
+            "url": blog_url,
+            "error": str(e),
+            "test_time": datetime.now().isoformat(),
+            "status": "test_failed"
+        }
 
 def extract_patent_links(html_content: str, base_url: str) -> List[str]:
     """Extract patent links from patent search results"""

@@ -749,7 +749,7 @@ async def upload_blog(request: BlogUploadRequest):
         print(f"Starting blog upload for: {request.url}")
         
         # Discover articles from the blog
-        from scraper import discover_articles_from_blog
+        from scraper import discover_articles_from_blog, fallback_scrape_blog_articles
         article_urls = await discover_articles_from_blog(request.url)
         print(f"Discovered {len(article_urls)} articles")
         
@@ -766,13 +766,67 @@ async def upload_blog(request: BlogUploadRequest):
                 suggestion="Try uploading individual patent URLs like: https://patents.google.com/patent/US12345678"
             )
         
+        # If no articles found with primary method, try fallback scraping
         if not article_urls:
-            return BlogUploadResponse(
-                message="No articles found on the blog/website",
-                total_articles=0,
-                processed_articles=0,
-                articles=[]
-            )
+            print("⚠️  Primary scraping failed, attempting fallback scraping...")
+            try:
+                fallback_articles = fallback_scrape_blog_articles(request.url)
+                if fallback_articles:
+                    print(f"✅ Fallback scraping successful: {len(fallback_articles)} articles found")
+                    # Convert fallback articles to the expected format
+                    article_urls = [article["url"] for article in fallback_articles]
+                    # Store fallback articles for later processing
+                    fallback_data = {article["url"]: article for article in fallback_articles}
+                else:
+                    print("❌ Fallback scraping also failed")
+                    return BlogUploadResponse(
+                        message="No articles found on the blog/website using any available method",
+                        total_articles=0,
+                        processed_articles=0,
+                        articles=[],
+                        status="no_articles_found"
+                    )
+            except Exception as e:
+                print(f"❌ Fallback scraping error: {e}")
+                return BlogUploadResponse(
+                    message="No articles found on the blog/website",
+                    total_articles=0,
+                    processed_articles=0,
+                    articles=[],
+                    status="scraping_failed"
+                )
+        
+        # If very few articles found, try fallback to get more
+        elif len(article_urls) < 5:
+            print(f"⚠️  Only {len(article_urls)} articles found with primary method, attempting fallback to get more...")
+            try:
+                fallback_articles = fallback_scrape_blog_articles(request.url)
+                if fallback_articles and len(fallback_articles) > len(article_urls):
+                    print(f"✅ Fallback found {len(fallback_articles)} additional articles")
+                    # Merge fallback articles with primary ones, avoiding duplicates
+                    existing_urls = set(article_urls)
+                    additional_urls = []
+                    additional_fallback_data = {}
+                    
+                    for article in fallback_articles:
+                        if article["url"] not in existing_urls:
+                            additional_urls.append(article["url"])
+                            additional_fallback_data[article["url"]] = article
+                    
+                    if additional_urls:
+                        article_urls.extend(additional_urls)
+                        # Merge fallback data
+                        if 'fallback_data' not in locals():
+                            fallback_data = {}
+                        fallback_data.update(additional_fallback_data)
+                        print(f"   📈 Total articles now: {len(article_urls)} (primary: {len(article_urls) - len(additional_urls)}, fallback: {len(additional_urls)})")
+                    else:
+                        print("   ℹ️  No additional unique articles found via fallback")
+                else:
+                    print("   ℹ️  Fallback didn't find additional articles")
+            except Exception as e:
+                print(f"   ⚠️  Fallback attempt failed: {e}")
+                # Continue with primary articles only
         
         processed_articles = []
         total_articles = len(article_urls)
@@ -782,8 +836,18 @@ async def upload_blog(request: BlogUploadRequest):
             try:
                 print(f"Processing article {i+1}/{total_articles}: {article_url}")
                 
-                # Scrape the article with unique processing
-                scraped_data = real_scrape_url(article_url)
+                # Check if this is a fallback article
+                if 'fallback_data' in locals() and article_url in fallback_data:
+                    print(f"   🔄 Using fallback data for article {i+1}")
+                    scraped_data = fallback_data[article_url]
+                    # Ensure fallback data has required fields
+                    if not scraped_data.get("text"):
+                        scraped_data["text"] = scraped_data.get("text", f"Fallback content from {article_url}")
+                    if not scraped_data.get("title"):
+                        scraped_data["title"] = f"Fallback Article {i+1} from {request.url}"
+                else:
+                    # Scrape the article with unique processing
+                    scraped_data = real_scrape_url(article_url)
                 
                 # Ensure we have unique content for each article
                 if not scraped_data.get("text") or len(scraped_data["text"]) < 100:
@@ -911,6 +975,137 @@ async def upload_blog(request: BlogUploadRequest):
     except Exception as e:
         print(f"Blog upload error: {e}")
         raise HTTPException(status_code=500, detail=f"Error processing blog: {str(e)}")
+
+@app.post("/api/blog/fallback-scrape")
+async def fallback_scrape_blog(request: dict):
+    """Fallback scraping endpoint for blogs that fail primary scraping"""
+    try:
+        url = request.get("url", "").strip()
+        if not url:
+            raise HTTPException(status_code=400, detail="Blog URL cannot be empty")
+        
+        print(f"🔄 Starting fallback scraping for: {url}")
+        
+        # Import and use the fallback scraping function
+        from scraper import fallback_scrape_blog_articles
+        
+        # Attempt fallback scraping
+        fallback_articles = fallback_scrape_blog_articles(url)
+        
+        if fallback_articles:
+            print(f"✅ Fallback scraping successful: {len(fallback_articles)} articles found")
+            
+            # Process the fallback articles
+            processed_articles = []
+            for i, article in enumerate(fallback_articles):
+                try:
+                    # Generate summary and keywords for fallback articles
+                    summary, keywords = summarize_text(article.get("text", ""))
+                    embedding = embed_text(summary)
+                    
+                    # Extract companies
+                    companies = article.get("companies", [])
+                    if not companies:
+                        companies = extract_companies_from_text(article.get("text", ""))
+                    
+                    # Create processed article
+                    processed_article = {
+                        "url": article["url"],
+                        "title": article["title"],
+                        "summary": summary,
+                        "keywords": keywords,
+                        "companies": companies,
+                        "status": "fallback_success",
+                        "scraping_method": article.get("scraping_method", "unknown"),
+                        "article_index": i + 1
+                    }
+                    processed_articles.append(processed_article)
+                    
+                    # Add to global articles list
+                    global_article = {
+                        "url": article["url"],
+                        "title": article["title"],
+                        "summary": summary,
+                        "full_content": article.get("text", ""),
+                        "keywords": keywords,
+                        "companies": companies,
+                        "embedding": embedding,
+                        "publish_date": article.get("publish_date") or datetime.now().isoformat(),
+                        "authors": article.get("authors", ["Unknown Author"]),
+                        "source_blog": url,
+                        "article_index": i + 1
+                    }
+                    articles.append(global_article)
+                    
+                    print(f"   ✅ Processed fallback article {i+1}: {article['title'][:50]}...")
+                    
+                except Exception as e:
+                    print(f"   ❌ Error processing fallback article {i+1}: {e}")
+                    processed_articles.append({
+                        "url": article["url"],
+                        "title": f"Error processing {article['url']}",
+                        "summary": "",
+                        "keywords": [],
+                        "companies": [],
+                        "status": "fallback_error",
+                        "error": str(e)
+                    })
+            
+            # Save to persistent storage
+            persistent_storage.save_articles(articles)
+            print(f"💾 Saved {len(articles)} articles to persistent storage")
+            
+            return {
+                "message": f"Fallback scraping successful: {len(processed_articles)} articles processed",
+                "total_articles": len(fallback_articles),
+                "processed_articles": len([a for a in processed_articles if a['status'] == 'fallback_success']),
+                "articles": processed_articles,
+                "status": "fallback_success",
+                "scraping_methods_used": list(set(a.get("scraping_method", "unknown") for a in fallback_articles))
+            }
+        else:
+            print("❌ Fallback scraping failed - no articles found")
+            return {
+                "message": "Fallback scraping failed - no articles could be extracted",
+                "total_articles": 0,
+                "processed_articles": 0,
+                "articles": [],
+                "status": "fallback_failed"
+            }
+        
+    except Exception as e:
+        print(f"❌ Fallback scraping error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error in fallback scraping: {str(e)}")
+
+@app.post("/api/blog/test-fallback")
+async def test_blog_fallback_scraping(request: dict):
+    """Test endpoint to evaluate fallback scraping capabilities for a blog"""
+    try:
+        url = request.get("url", "").strip()
+        if not url:
+            raise HTTPException(status_code=400, detail="Blog URL cannot be empty")
+        
+        print(f"🧪 Testing fallback scraping capabilities for: {url}")
+        
+        # Import and use the test function
+        from scraper import test_fallback_scraping
+        
+        # Run the test
+        test_results = test_fallback_scraping(url)
+        
+        return {
+            "message": "Fallback scraping test completed",
+            "test_results": test_results,
+            "status": "test_completed"
+        }
+        
+    except Exception as e:
+        print(f"❌ Test error: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error in test: {str(e)}")
 
 @app.post("/api/thesis/text")
 async def add_thesis_text(request: dict):
