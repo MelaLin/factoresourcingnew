@@ -552,7 +552,7 @@ async def upload_thesis(
             # Add thesis to vector store
             add_thesis(text)
             
-            # Track thesis upload for history
+            # Track thesis upload for history with FULL CONTENT
             thesis_info = {
                 "id": f"thesis_{len(thesis_uploads) + 1}",
                 "filename": file.filename,
@@ -560,7 +560,7 @@ async def upload_thesis(
                 "file_type": os.path.splitext(file.filename)[1],
                 "content_length": len(text),
                 "upload_time": datetime.now().isoformat(),
-                "content": text,  # Store the actual content
+                "full_content": text,  # Store the complete thesis text (consistent with text input)
                 "summary": f"Processed {len(text)} characters from {file.filename}"
             }
             thesis_uploads.append(thesis_info)
@@ -780,14 +780,16 @@ async def add_thesis_text(request: dict):
         # Add thesis to vector store
         add_thesis(text)
         
-        # Track thesis upload for history
+        # Track thesis upload for history with FULL CONTENT
         thesis_info = {
             "id": f"thesis_text_{len(thesis_uploads) + 1}",
             "filename": "Text Input",
             "file_type": ".txt",
             "content_length": len(text),
             "upload_time": datetime.now().isoformat(),
-            "summary": f"Processed {len(text)} characters from text input"
+            "summary": f"Processed {len(text)} characters from text input",
+            "full_content": text,  # Store the complete thesis text
+            "title": "Solar Thesis"  # Default title for text input
         }
         thesis_uploads.append(thesis_info)
         print(f"📝 Thesis text tracked for history: {thesis_info}")

@@ -31,6 +31,7 @@ interface ThesisRevision {
   id: string;
   filename: string;
   content: string;
+  full_content?: string;  // Full thesis content for display
   original_content: string;
   upload_time: string;
   file_type: string;
@@ -98,6 +99,7 @@ export const Revisions = () => {
               id: item.id,
               filename: item.title.replace('Thesis: ', ''),
               content: item.content || '',
+              full_content: item.full_content || item.content || '',  // Use full_content if available
               original_content: item.content || '',
               upload_time: item.timestamp,
               file_type: 'text',
@@ -607,7 +609,7 @@ export const Revisions = () => {
                       </div>
                       <div className="bg-gray-50 p-4 rounded-lg max-h-96 overflow-y-auto">
                         <pre className="whitespace-pre-wrap text-sm font-mono text-gray-800 leading-relaxed">
-                          {thesis.content}
+                          {thesis.full_content || thesis.content || "No content available"}
                         </pre>
                       </div>
                       {thesis.has_changes && (
