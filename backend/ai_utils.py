@@ -45,7 +45,7 @@ def summarize_text(text):
         """
         
         response = openai.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o",  # Use GPT-4o for best performance
             messages=[
                 {"role": "system", "content": "You are an expert at creating accurate, informative summaries. Focus on factual information and key details."},
                 {"role": "user", "content": prompt}
@@ -177,7 +177,7 @@ def extract_companies(text, max_companies=10):
         """
         
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",  # Use GPT-4o for best performance
             messages=[
                 {"role": "system", "content": "You are an expert at identifying real company names from text. Be very selective and only return actual companies. Never return generic business terms alone."},
                 {"role": "user", "content": prompt}
@@ -484,7 +484,7 @@ def analyze_thesis_alignment(article_text: str, thesis_points: list, thesis_keyw
         """
         
         response = openai.chat.completions.create(
-            model="gpt-4",
+            model="gpt-4o",  # Use GPT-4o for best performance
             messages=[
                 {"role": "system", "content": "You are an expert investment analyst who evaluates content relevance to investment theses. Provide accurate, detailed analysis."},
                 {"role": "user", "content": prompt}
@@ -545,7 +545,7 @@ def extract_keywords_from_summary(summary, max_keywords=8):
         """
         
         response = openai.chat.completions.create(
-            model="gpt-3.5-turbo",
+            model="gpt-4o",  # Use GPT-4o for best performance
             messages=[
                 {"role": "system", "content": "You are an expert at extracting relevant keywords from text."},
                 {"role": "user", "content": prompt}
