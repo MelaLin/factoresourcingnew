@@ -61,10 +61,23 @@ def summarize_text(text):
     except Exception as e:
         print(f"OpenAI API error: {e}")
         # Fallback to mock response
-        return (
-            "This is a fallback summary due to API issues. The content appears to be about various topics.",
-            ["fallback", "api", "content", "analysis", "error"]
-        )
+        # Enhanced fallback summary
+        words = text.split()
+        if len(words) > 200:
+            # Take first 150 words and last 50 words for better context
+            first_part = ' '.join(words[:150])
+            last_part = ' '.join(words[-50:])
+            summary = f"{first_part}... {last_part}"
+        elif len(words) > 100:
+            summary = ' '.join(words[:100]) + "..."
+        else:
+            summary = text
+        
+        # Extract basic keywords
+        keywords = extract_keywords_from_text(text)
+        
+        print(f"📝 Generated enhanced fallback summary: {len(summary)} characters")
+        return summary, keywords
 
 def generate_title_from_url(url: str) -> str:
     """Generate a descriptive title from URL"""

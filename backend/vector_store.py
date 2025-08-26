@@ -52,8 +52,8 @@ def find_relevant_articles(articles):
     print(f"🔍 Finding relevant articles from {len(articles)} articles")
     print(f"📚 Thesis has {len(thesis_embeddings)} embeddings and {len(thesis_keywords)} keywords")
     
-            # If no thesis embeddings exist, return articles with default scores
-        if len(thesis_embeddings) == 0:
+    # If no thesis embeddings exist, return articles with default scores
+    if len(thesis_embeddings) == 0:
             print("⚠️  No thesis uploaded yet, returning default matches")
             for article in articles:
                 matches.append({

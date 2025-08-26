@@ -427,6 +427,32 @@ thesis_uploads = []  # Track thesis uploads for history
 blog_searches = []  # Track blog search queries for starring
 starred_blogs = []  # Track starred blogs for continuous monitoring
 
+# Add some test data to ensure the system works
+def initialize_test_data():
+    """Initialize with some test data to ensure functionality"""
+    global articles, thesis_uploads
+    
+    if not articles:  # Only add if empty
+        test_article = {
+            "url": "https://techcrunch.com/2025/08/20/meta-to-add-100-mw-of-solar-power-from-u-s-gear/",
+            "title": "Meta to add 100MW of solar power from US gear",
+            "summary": "Meta is expanding its renewable energy portfolio with a new solar power project.",
+            "full_content": "Meta has announced plans to add 100MW of solar power capacity using US-manufactured equipment. This move aligns with the company's commitment to renewable energy and domestic manufacturing.",
+            "keywords": ["solar power", "renewable energy", "Meta", "US manufacturing"],
+            "companies": ["Meta", "Solar Company Inc"],
+            "embedding": [0.1, 0.2, 0.3, 0.4, 0.5],  # Placeholder embedding
+            "publish_date": "2025-08-20T00:00:00Z",
+            "authors": ["TechCrunch Staff"],
+            "scraping_allowed": True,
+            "warning": None,
+            "upload_time": datetime.now().isoformat()
+        }
+        articles.append(test_article)
+        print(f"✅ Added test article: {test_article['title']}")
+
+# Initialize test data when module loads
+initialize_test_data()
+
 # Example API route
 @app.get("/api/hello")
 async def hello():
