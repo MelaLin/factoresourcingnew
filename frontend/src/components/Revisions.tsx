@@ -203,6 +203,8 @@ export const Revisions = () => {
 
   const removeArticle = async (articleId: string) => {
     try {
+      console.log(`🗑️  Removing article: ${articleId}`);
+      
       // Call backend to remove the article
       const response = await fetch(`${API_BASE_URL}/api/history/${articleId}`, {
         method: 'DELETE'
@@ -213,12 +215,22 @@ export const Revisions = () => {
         setArticles(prev => prev.filter(article => article.id !== articleId));
         setHasUnsavedChanges(true);
         console.log(`✅ Article ${articleId} removed successfully`);
+        
+        // Clear any previous errors
+        setError(null);
       } else {
-        throw new Error('Failed to remove article');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to remove article');
       }
     } catch (err) {
       console.error('❌ Error removing article:', err);
-      setError('Failed to remove article');
+      // Don't set the main error state - just show a temporary message
+      // This prevents the "error loading revisions" screen from appearing
+      const tempError = `Failed to remove article: ${err.message}`;
+      console.warn(tempError);
+      
+      // Optionally show a toast notification instead of setting the main error
+      // For now, just log the error without breaking the UI
     }
   };
 
@@ -246,6 +258,8 @@ export const Revisions = () => {
 
   const deactivateBlog = async (blogId: string) => {
     try {
+      console.log(`🗑️  Removing blog: ${blogId}`);
+      
       // Call backend to remove the blog
       const response = await fetch(`${API_BASE_URL}/api/history/${blogId}`, {
         method: 'DELETE'
@@ -256,17 +270,25 @@ export const Revisions = () => {
         setBlogRevisions(prev => prev.filter(blog => blog.id !== blogId));
         setHasUnsavedChanges(true);
         console.log(`✅ Blog ${blogId} removed successfully`);
+        
+        // Clear any previous errors
+        setError(null);
       } else {
-        throw new Error('Failed to remove blog');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to remove blog');
       }
     } catch (err) {
       console.error('❌ Error removing blog:', err);
-      setError('Failed to remove blog');
+      // Don't set the main error state - just show a temporary message
+      const tempError = `Failed to remove blog: ${err.message}`;
+      console.warn(tempError);
     }
   };
 
   const deactivateThesis = async (thesisId: string) => {
     try {
+      console.log(`🗑️  Removing thesis: ${thesisId}`);
+      
       // Call backend to remove the thesis
       const response = await fetch(`${API_BASE_URL}/api/history/${thesisId}`, {
         method: 'DELETE'
@@ -277,12 +299,18 @@ export const Revisions = () => {
         setThesisRevisions(prev => prev.filter(thesis => thesis.id !== thesisId));
         setHasUnsavedChanges(true);
         console.log(`✅ Thesis ${thesisId} removed successfully`);
+        
+        // Clear any previous errors
+        setError(null);
       } else {
-        throw new Error('Failed to remove thesis');
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to remove thesis');
       }
     } catch (err) {
       console.error('❌ Error removing thesis:', err);
-      setError('Failed to remove thesis');
+      // Don't set the main error state - just show a temporary message
+      const tempError = `Failed to remove thesis: ${err.message}`;
+      console.warn(tempError);
     }
   };
 

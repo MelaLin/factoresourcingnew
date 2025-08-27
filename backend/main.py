@@ -1801,12 +1801,18 @@ async def remove_history_item(item_id: str):
     try:
         print(f"🗑️  Removing history item: {item_id}")
         
-        if item_id.startswith("source_"):
-            # Remove article from articles list
-            index = int(item_id.replace("source_", ""))
+        if item_id.startswith("source_") or item_id.startswith("article_"):
+            # Remove article from articles list - handle both ID formats
+            if item_id.startswith("source_"):
+                index = int(item_id.replace("source_", ""))
+            else:  # article_ format
+                index = int(item_id.replace("article_", ""))
+                
             if 0 <= index < len(articles):
                 removed_article = articles.pop(index)
                 print(f"✅ Removed article: {removed_article.get('title', 'Unknown')}")
+                # Save to persistent storage
+                persistent_storage.save_articles(articles)
                 return {"message": "Article removed from history", "removed_id": item_id}
             else:
                 raise HTTPException(status_code=404, detail="Article not found")
@@ -1822,6 +1828,8 @@ async def remove_history_item(item_id: str):
             if thesis_index is not None:
                 removed_thesis = thesis_uploads.pop(thesis_index)
                 print(f"✅ Removed thesis: {removed_thesis.get('title', 'Unknown')}")
+                # Save to persistent storage
+                persistent_storage.save_thesis_uploads(thesis_uploads)
                 return {"message": "Thesis removed from history", "removed_id": item_id}
             else:
                 raise HTTPException(status_code=404, detail="Thesis not found")
@@ -1837,6 +1845,8 @@ async def remove_history_item(item_id: str):
             if blog_index is not None:
                 removed_blog = blog_searches.pop(blog_index)
                 print(f"✅ Removed blog search: {removed_blog.get('url', 'Unknown')}")
+                # Save to persistent storage
+                persistent_storage.save_blog_searches(blog_searches)
                 return {"message": "Blog search removed from history", "removed_id": item_id}
             else:
                 raise HTTPException(status_code=404, detail="Blog search not found")
