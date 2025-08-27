@@ -20,12 +20,15 @@ import {
 
 interface BlogRevision {
   id: string;
-  url: string;
+  keyword?: string;  // For keyword searches
+  url?: string;      // For traditional blog searches
   search_time: string;
   total_articles_found: number;
   processed_articles: number;
   is_active: boolean;
   removed_articles: string[];
+  scholar_papers?: number;  // For keyword searches
+  patents?: number;         // For keyword searches
 }
 
 interface ThesisRevision {
@@ -85,15 +88,17 @@ export const Revisions = () => {
         const articlesList: Article[] = [];
         
         historyData.forEach((item: any) => {
-          if (item.type === 'blog_search') {
+          if (item.type === 'keyword_search') {
             blogs.push({
               id: item.id,
-              url: item.url,
+              keyword: item.keyword || 'Unknown',
               search_time: item.timestamp,
               total_articles_found: item.total_articles || 0,
               processed_articles: item.processed_articles || 0,
-              is_active: true, // All blogs are active by default
-              removed_articles: []
+              is_active: true, // All keyword searches are active by default
+              removed_articles: [],
+              scholar_papers: item.scholar_papers || 0,
+              patents: item.patents || 0
             });
           } else if (item.type === 'thesis') {
             theses.push({
@@ -453,9 +458,9 @@ export const Revisions = () => {
             <Card className="text-center py-12">
               <CardContent>
                 <Globe className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Blog Revisions Yet</h3>
+                <h3 className="text-lg font-semibold mb-2">No Keyword Searches Yet</h3>
                 <p className="text-muted-foreground">
-                  Upload blogs to see them in revisions
+                  Perform keyword searches to see them in revisions
                 </p>
               </CardContent>
             </Card>
@@ -468,7 +473,7 @@ export const Revisions = () => {
                       <div className="flex items-center gap-2 mb-2">
                         <Globe className="h-4 w-4 text-blue-600" />
                         <CardTitle className="text-lg font-semibold line-clamp-2">
-                          {blog.url}
+                          {blog.keyword || blog.url || 'Unknown Search'}
                         </CardTitle>
                         <Badge variant="secondary" className="bg-blue-100 text-blue-800">
                           Active
@@ -488,6 +493,18 @@ export const Revisions = () => {
                         <span className="text-green-600">
                           {blog.processed_articles} processed
                         </span>
+                        
+                        {blog.scholar_papers && blog.scholar_papers > 0 && (
+                          <span className="text-purple-600">
+                            {blog.scholar_papers} Scholar papers
+                          </span>
+                        )}
+                        
+                        {blog.patents && blog.patents > 0 && (
+                          <span className="text-orange-600">
+                            {blog.patents} Patents
+                          </span>
+                        )}
                       </div>
                     </div>
                     

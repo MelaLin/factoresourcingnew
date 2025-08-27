@@ -1115,16 +1115,18 @@ async def get_comprehensive_history():
         
         history = []
         
-        # Add blog searches
+        # Add blog searches (keyword searches)
         for blog_search in blog_searches:
             history.append({
                 "id": blog_search["id"],
-                "type": "blog_search",
-                "url": blog_search["url"],
+                "type": "keyword_search",
+                "keyword": blog_search.get("keyword", "Unknown"),
                 "timestamp": blog_search["search_time"],
-                "total_articles": blog_search["total_articles_found"],
-                "processed_articles": blog_search["processed_articles"],
-                "search_type": blog_search.get("search_type", "blog_search")
+                "total_articles": blog_search.get("total_sources", 0),
+                "processed_articles": blog_search.get("processed_sources", 0),
+                "search_type": blog_search.get("search_type", "keyword_search"),
+                "scholar_papers": blog_search.get("scholar_papers_found", 0),
+                "patents": blog_search.get("patents_found", 0)
             })
         
         # Add thesis uploads
