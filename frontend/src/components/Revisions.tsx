@@ -30,6 +30,7 @@ interface BlogRevision {
   scholar_papers?: number;  // For keyword searches
   patents?: number;         // For keyword searches
   is_starred?: boolean;     // Star status for priority matching
+  search_type?: string;     // 'blog_upload' or 'keyword_search'
 }
 
 interface ThesisRevision {
@@ -90,7 +91,20 @@ export const Revisions = () => {
         const articlesList: Article[] = [];
         
         historyData.forEach((item: any) => {
-          if (item.type === 'keyword_search') {
+          if (item.type === 'blog_upload') {
+            // This is a blog URL upload
+            blogs.push({
+              id: item.id,
+              url: item.url || 'Unknown',
+              search_time: item.timestamp,
+              total_articles_found: item.total_articles || 0,
+              processed_articles: item.processed_articles || 0,
+              is_active: true, // All blog uploads are active by default
+              removed_articles: [],
+              search_type: 'blog_upload'
+            });
+          } else if (item.type === 'keyword_search') {
+            // This is a keyword search
             blogs.push({
               id: item.id,
               keyword: item.keyword || 'Unknown',
@@ -100,7 +114,8 @@ export const Revisions = () => {
               is_active: true, // All keyword searches are active by default
               removed_articles: [],
               scholar_papers: item.scholar_papers || 0,
-              patents: item.patents || 0
+              patents: item.patents || 0,
+              search_type: 'keyword_search'
             });
           } else if (item.type === 'thesis') {
             theses.push({
@@ -523,9 +538,9 @@ export const Revisions = () => {
             <Card className="text-center py-12">
               <CardContent>
                 <Globe className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
-                <h3 className="text-lg font-semibold mb-2">No Keyword Searches Yet</h3>
+                <h3 className="text-lg font-semibold mb-2">No Blog Uploads Yet</h3>
                 <p className="text-muted-foreground">
-                  Perform keyword searches to see them in revisions
+                  Upload blogs or perform keyword searches to see them in revisions
                 </p>
               </CardContent>
             </Card>
@@ -538,10 +553,10 @@ export const Revisions = () => {
                       <div className="flex items-center gap-2 mb-2">
                         <Globe className="h-4 w-4 text-blue-600" />
                         <CardTitle className="text-lg font-semibold line-clamp-2">
-                          {blog.keyword || blog.url || 'Unknown Search'}
+                          {blog.search_type === 'blog_upload' ? blog.url : blog.keyword || 'Unknown Search'}
                         </CardTitle>
                         <Badge variant="secondary" className="bg-blue-100 text-blue-800">
-                          Active
+                          {blog.search_type === 'blog_upload' ? 'Blog Upload' : 'Keyword Search'}
                         </Badge>
                       </div>
                       

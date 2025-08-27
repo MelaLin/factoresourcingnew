@@ -931,7 +931,7 @@ async def upload_blog(request: BlogUploadRequest):
         successful_count = len([a for a in processed_articles if a['status'] == 'success'])
         print(f"Blog upload completed: {successful_count}/{total_articles} articles processed successfully")
         
-        # Track this blog search for history and starring
+        # Track this blog upload for history and starring
         blog_search = {
             "id": f"blog_{len(blog_searches)}_{int(time.time())}",
             "url": request.url,
@@ -939,7 +939,8 @@ async def upload_blog(request: BlogUploadRequest):
             "total_articles_found": total_articles,
             "processed_articles": successful_count,
             "is_starred": False,
-            "last_monitored": datetime.now().isoformat()
+            "last_monitored": datetime.now().isoformat(),
+            "search_type": "blog_upload"  # Distinguish from keyword searches
         }
         blog_searches.append(blog_search)
         print(f"📝 Blog search tracked for history: {blog_search['id']}")
@@ -1115,19 +1116,32 @@ async def get_comprehensive_history():
         
         history = []
         
-        # Add blog searches (keyword searches)
+        # Add blog searches and blog uploads
         for blog_search in blog_searches:
-            history.append({
-                "id": blog_search["id"],
-                "type": "keyword_search",
-                "keyword": blog_search.get("keyword", "Unknown"),
-                "timestamp": blog_search["search_time"],
-                "total_articles": blog_search.get("total_sources", 0),
-                "processed_articles": blog_search.get("processed_sources", 0),
-                "search_type": blog_search.get("search_type", "keyword_search"),
-                "scholar_papers": blog_search.get("scholar_papers_found", 0),
-                "patents": blog_search.get("patents_found", 0)
-            })
+            if blog_search.get("search_type") == "blog_upload":
+                # This is a blog URL upload
+                history.append({
+                    "id": blog_search["id"],
+                    "type": "blog_upload",
+                    "url": blog_search.get("url", "Unknown"),
+                    "timestamp": blog_search["search_time"],
+                    "total_articles": blog_search.get("total_articles_found", 0),
+                    "processed_articles": blog_search.get("processed_articles", 0),
+                    "search_type": "blog_upload"
+                })
+            else:
+                # This is a keyword search
+                history.append({
+                    "id": blog_search["id"],
+                    "type": "keyword_search",
+                    "keyword": blog_search.get("keyword", "Unknown"),
+                    "timestamp": blog_search["search_time"],
+                    "total_articles": blog_search.get("total_sources", 0),
+                    "processed_articles": blog_search.get("processed_sources", 0),
+                    "search_type": blog_search.get("search_type", "keyword_search"),
+                    "scholar_papers": blog_search.get("scholar_papers_found", 0),
+                    "patents": blog_search.get("patents_found", 0)
+                })
         
         # Add thesis uploads
         for thesis in thesis_uploads:
