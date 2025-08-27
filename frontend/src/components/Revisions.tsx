@@ -29,6 +29,7 @@ interface BlogRevision {
   removed_articles: string[];
   scholar_papers?: number;  // For keyword searches
   patents?: number;         // For keyword searches
+  is_starred?: boolean;     // Star status for priority matching
 }
 
 interface ThesisRevision {
@@ -42,6 +43,7 @@ interface ThesisRevision {
   is_active: boolean;
   title: string;
   has_changes: boolean;
+  is_starred?: boolean;  // Star status for priority matching
 }
 
 interface Article {
@@ -281,6 +283,41 @@ export const Revisions = () => {
       console.error('❌ Error removing blog:', err);
       // Don't set the main error state - just show a temporary message
       const tempError = `Failed to remove blog: ${err.message}`;
+      console.warn(tempError);
+    }
+  };
+
+  const starThesis = async (thesisId: string) => {
+    try {
+      console.log(`⭐ Starring/unstarring thesis: ${thesisId}`);
+      
+      // Call backend to star/unstar the thesis
+      const response = await fetch(`${API_BASE_URL}/api/thesis/star/${thesisId}`, {
+        method: 'POST'
+      });
+      
+      if (response.ok) {
+        const result = await response.json();
+        console.log(`⭐ Thesis ${thesisId} starred/unstarred:`, result);
+        
+        // Update local state
+        setThesisRevisions(prev => 
+          prev.map(thesis => 
+            thesis.id === thesisId 
+              ? { ...thesis, is_starred: result.is_starred }
+              : thesis
+          )
+        );
+        
+        // Clear any previous errors
+        setError(null);
+      } else {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.detail || 'Failed to star thesis');
+      }
+    } catch (err) {
+      console.error('❌ Error starring thesis:', err);
+      const tempError = `Failed to star thesis: ${err.message}`;
       console.warn(tempError);
     }
   };
@@ -541,9 +578,9 @@ export const Revisions = () => {
                         variant="outline"
                         size="sm"
                         onClick={() => starBlog(blog.id)}
-                        className="text-yellow-600 hover:bg-yellow-50"
+                        className={`${blog.is_starred ? 'text-yellow-600 bg-yellow-50' : 'text-yellow-600 hover:bg-yellow-50'}`}
                       >
-                        <Star className="h-4 w-4" />
+                        <Star className={`h-4 w-4 ${blog.is_starred ? 'fill-current' : ''}`} />
                       </Button>
                       <Button
                         variant="outline"
@@ -645,6 +682,14 @@ export const Revisions = () => {
                         </>
                       ) : (
                         <>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={() => starThesis(thesis.id)}
+                            className={`${thesis.is_starred ? 'text-yellow-600 bg-yellow-50' : 'text-yellow-600 hover:bg-yellow-50'}`}
+                          >
+                            <Star className={`h-4 w-4 ${thesis.is_starred ? 'fill-current' : ''}`} />
+                          </Button>
                           <Button
                             variant="outline"
                             size="sm"

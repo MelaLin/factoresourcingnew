@@ -1318,6 +1318,35 @@ async def star_blog(blog_id: str):
         print(f"Error starring blog: {e}")
         raise HTTPException(status_code=500, detail=f"Error starring blog: {str(e)}")
 
+@app.post("/api/thesis/star/{thesis_id}")
+async def star_thesis(thesis_id: str):
+    """Star a thesis for priority matching"""
+    try:
+        print(f"⭐ Starring/unstarring thesis: {thesis_id}")
+        
+        # Find the thesis
+        thesis = next((t for t in thesis_uploads if t['id'] == thesis_id), None)
+        if not thesis:
+            raise HTTPException(status_code=404, detail="Thesis not found")
+        
+        # Toggle star status
+        thesis['is_starred'] = not thesis.get('is_starred', False)
+        
+        # Save to persistent storage
+        persistent_storage.save_thesis_uploads(thesis_uploads)
+        
+        print(f"⭐ Thesis {'starred' if thesis['is_starred'] else 'unstarred'}: {thesis.get('title', 'Unknown')}")
+        
+        return {
+            "message": f"Thesis {'starred' if thesis['is_starred'] else 'unstarred'} successfully",
+            "thesis_id": thesis_id,
+            "is_starred": thesis['is_starred']
+        }
+        
+    except Exception as e:
+        print(f"Error starring thesis: {e}")
+        raise HTTPException(status_code=500, detail=f"Error starring thesis: {str(e)}")
+
 @app.get("/api/sources/starred")
 async def get_starred_sources():
     """Get all starred sources"""
@@ -1457,6 +1486,67 @@ async def get_matches_starred_only():
         
     except Exception as e:
         print(f"Error getting starred matches: {e}")
+        raise HTTPException(status_code=500, detail=f"Error getting starred matches: {str(e)}")
+
+@app.get("/api/matches/starred-all")
+async def get_matches_from_starred_items():
+    """Get matches from all starred items (blogs and theses)"""
+    try:
+        print("⭐ Getting matches from starred items...")
+        
+        # Get starred blogs
+        starred_blog_urls = {blog.get('url', '') for blog in starred_blogs if blog.get('is_starred', False)}
+        starred_keywords = {blog.get('keyword', '') for blog in blog_searches if blog.get('is_starred', False)}
+        
+        # Get starred theses
+        starred_theses = [t for t in thesis_uploads if t.get('is_starred', False)]
+        
+        print(f"   📚 Starred blogs: {len(starred_blog_urls)}")
+        print(f"   🔑 Starred keywords: {len(starred_keywords)}")
+        print(f"   📝 Starred theses: {len(starred_theses)}")
+        
+        # Filter articles based on starred blogs and keywords
+        relevant_articles = []
+        
+        for article in articles:
+            # Check if article is from a starred blog
+            is_from_starred_blog = any(blog_url in article.get('url', '') for blog_url in starred_blog_urls)
+            
+            # Check if article matches starred keywords
+            article_title = article.get('title', '').lower()
+            article_summary = article.get('summary', '').lower()
+            matches_starred_keyword = any(
+                keyword.lower() in article_title or keyword.lower() in article_summary 
+                for keyword in starred_keywords if keyword
+            )
+            
+            if is_from_starred_blog or matches_starred_keyword:
+                relevant_articles.append(article)
+        
+        print(f"   📰 Relevant articles found: {len(relevant_articles)}")
+        
+        if not relevant_articles:
+            return {
+                "message": "No relevant articles found from starred items",
+                "matches": [],
+                "starred_blogs_count": len(starred_blogs),
+                "starred_theses_count": len(starred_theses),
+                "relevant_articles_count": 0
+            }
+        
+        # Get matches for relevant articles
+        matches = find_relevant_articles(relevant_articles)
+        
+        return {
+            "message": f"Found {len(relevant_articles)} matches from starred items",
+            "matches": matches,
+            "starred_blogs_count": len(starred_blogs),
+            "starred_theses_count": len(starred_theses),
+            "relevant_articles_count": len(relevant_articles)
+        }
+        
+    except Exception as e:
+        print(f"Error getting matches from starred items: {e}")
         raise HTTPException(status_code=500, detail=f"Error getting starred matches: {str(e)}")
 
 @app.post("/api/scholar/search")

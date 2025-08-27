@@ -401,23 +401,23 @@ const Index = () => {
 
           <TabsContent value="matches">
             <div className="space-y-6">
-              {/* Starred Blogs Matching Section */}
+              {/* Starred Items Matching Section */}
               <Card className="border-2 border-yellow-200 bg-yellow-50">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
                     <Star className="h-5 w-5 text-yellow-600 fill-current" />
-                    Starred Blogs Matching
+                    Starred Items Matching
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-4">
                     <p className="text-sm text-gray-700">
-                      Run content matching exclusively on your starred blogs and their articles.
+                      Run content matching on your starred blogs, keywords, and theses for priority analysis.
                     </p>
                     <Button 
                       onClick={async () => {
                         try {
-                          const response = await fetch(`${API_BASE_URL}/api/matches/starred`);
+                          const response = await fetch(`${API_BASE_URL}/api/matches/starred-all`);
                           if (response.ok) {
                             const data = await response.json();
                             if (data.matches && data.matches.length > 0) {
@@ -436,12 +436,12 @@ const Index = () => {
                                 thesisAlignment: match.match_reason || 'No alignment information available'
                               }));
                               setMatchedContent(transformedStarredMatches);
-                              alert(`Found ${data.matches.length} matches from starred blogs!`);
+                              alert(`Found ${data.matches.length} matches from starred items! (${data.starred_blogs_count} starred blogs, ${data.starred_theses_count} starred theses)`);
                             } else {
-                              alert('No matches found from starred blogs. Try uploading a thesis first.');
+                              alert('No matches found from starred items. Try starring some blogs, keywords, or theses first.');
                             }
                           } else {
-                            alert('Failed to get starred matches. Make sure you have starred blogs.');
+                            alert('Failed to get starred matches. Make sure you have starred items.');
                           }
                         } catch (error) {
                           console.error('Error getting starred matches:', error);
@@ -451,7 +451,7 @@ const Index = () => {
                       className="bg-yellow-600 hover:bg-yellow-700"
                     >
                       <Star className="h-4 w-4 mr-2" />
-                      Match Starred Blogs
+                      Match Starred Items
                     </Button>
                   </div>
                 </CardContent>
