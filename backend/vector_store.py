@@ -69,7 +69,7 @@ def find_relevant_articles(articles):
                     "detailed_scores": {
                         "vector_similarity": 0.0,
                         "keyword_overlap": 0.0,
-                        "semantic_similarity": 0.0,
+                        "text_similarity": 0.0,
                         "content_quality": 0.0
                     }
                 })
@@ -78,6 +78,11 @@ def find_relevant_articles(articles):
     for i, article in enumerate(articles):
         print(f"📄 Processing article {i+1}/{len(articles)}: {article.get('title', 'Unknown')}")
         
+        # Debug: Check article structure
+        print(f"   🔍 Article keys: {list(article.keys())}")
+        print(f"   🔍 Has embedding: {bool(article.get('embedding'))}")
+        print(f"   🔍 Has summary: {bool(article.get('summary'))}")
+        
         match_scores = []
         matched_points = []
         match_reasons = []
@@ -85,18 +90,23 @@ def find_relevant_articles(articles):
         
         # Strategy 1: Vector similarity with thesis points
         try:
-            D, I = index.search(np.array([article['embedding']], dtype='float32'), min(3, len(thesis_embeddings)))
-            best_vector_score = 0.0
-            for j, (distance, idx) in enumerate(zip(D[0], I[0])):
-                if idx < len(thesis_embeddings):
-                    similarity_score = 1.0 / (1.0 + distance)  # Convert distance to similarity
-                    match_scores.append(similarity_score * 0.4)  # 40% weight
-                    matched_points.append(thesis_embeddings[idx][0])
-                    best_vector_score = max(best_vector_score, similarity_score)
-                    detailed_scores["vector_similarity"] = best_vector_score
-            
-            if best_vector_score > 0:
-                match_reasons.append(f"Vector similarity: {best_vector_score:.2f}")
+            if article.get('embedding') and len(thesis_embeddings) > 0:
+                D, I = index.search(np.array([article['embedding']], dtype='float32'), min(3, len(thesis_embeddings)))
+                best_vector_score = 0.0
+                for j, (distance, idx) in enumerate(zip(D[0], I[0])):
+                    if idx < len(thesis_embeddings):
+                        similarity_score = 1.0 / (1.0 + distance)  # Convert distance to similarity
+                        match_scores.append(similarity_score * 0.4)  # 40% weight
+                        matched_points.append(thesis_embeddings[idx][0])
+                        best_vector_score = max(best_vector_score, similarity_score)
+                        detailed_scores["vector_similarity"] = best_vector_score
+                
+                if best_vector_score > 0:
+                    match_reasons.append(f"Vector similarity: {best_vector_score:.2f}")
+            else:
+                # No embedding available, skip vector search
+                print(f"   ⚠️  No embedding available for article, skipping vector search")
+                detailed_scores["vector_similarity"] = 0.0
         except Exception as e:
             print(f"   ❌ Vector search error: {e}")
             detailed_scores["vector_similarity"] = 0.0
