@@ -112,8 +112,8 @@ export const Revisions = () => {
               id: item.id,
               keyword: item.keyword || 'Unknown',
               search_time: item.timestamp,
-              total_articles_found: item.total_articles || 0,
-              processed_articles: item.processed_articles || 0,
+              total_articles_found: item.total_sources || 0,
+              processed_articles: item.processed_sources || 0,
               is_active: true, // All keyword searches are active by default
               removed_articles: [],
               scholar_papers: item.scholar_papers || 0,
@@ -122,6 +122,7 @@ export const Revisions = () => {
               is_starred: item.is_starred || false
             });
           } else if (item.type === 'thesis') {
+            console.log(`📝 Processing thesis: ${item.id}, is_starred: ${item.is_starred}`);
             theses.push({
               id: item.id,
               filename: item.title.replace('Thesis: ', ''),
@@ -155,6 +156,11 @@ export const Revisions = () => {
         console.log(`📝 Blog revisions:`, blogs);
         console.log(`📚 Thesis revisions:`, theses);
         console.log(`📰 Articles:`, articlesList);
+        
+        // Debug: Show star status for each thesis
+        theses.forEach((thesis, index) => {
+          console.log(`⭐ Thesis ${index + 1}: ${thesis.title}, is_starred: ${thesis.is_starred}`);
+        });
       } else {
         throw new Error(`History fetch failed: ${historyResponse.status}`);
       }
