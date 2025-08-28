@@ -103,7 +103,8 @@ export const Revisions = () => {
               processed_articles: item.processed_articles || 0,
               is_active: true, // All blog uploads are active by default
               removed_articles: [],
-              search_type: 'blog_upload'
+              search_type: 'blog_upload',
+              is_starred: item.is_starred || false
             });
           } else if (item.type === 'keyword_search') {
             // This is a keyword search
@@ -117,7 +118,8 @@ export const Revisions = () => {
               removed_articles: [],
               scholar_papers: item.scholar_papers || 0,
               patents: item.patents || 0,
-              search_type: 'keyword_search'
+              search_type: 'keyword_search',
+              is_starred: item.is_starred || false
             });
           } else if (item.type === 'thesis') {
             theses.push({
@@ -130,7 +132,8 @@ export const Revisions = () => {
               file_type: 'text',
               is_active: true,
               title: item.title.replace('Thesis: ', ''),
-              has_changes: false
+              has_changes: false,
+              is_starred: item.is_starred || false
             });
           } else if (item.type === 'source') {
             articlesList.push({
@@ -267,14 +270,24 @@ export const Revisions = () => {
         const result = await response.json();
         console.log(`⭐ Blog ${blogId} starred/unstarred:`, result);
         
-        // Refresh revisions to get updated star status
-        fetchRevisions();
+        // Update local state
+        setBlogRevisions(prev => 
+          prev.map(blog => 
+            blog.id === blogId 
+              ? { ...blog, is_starred: result.is_starred }
+              : blog
+          )
+        );
+        
+        // Clear any previous errors
+        setError(null);
       } else {
         throw new Error('Failed to star blog');
       }
     } catch (err) {
       console.error('❌ Error starring blog:', err);
-      setError('Failed to star blog');
+      const tempError = `Failed to star blog: ${err.message}`;
+      console.warn(tempError);
     }
   };
 

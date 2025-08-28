@@ -1127,7 +1127,8 @@ async def get_comprehensive_history():
                     "timestamp": blog_search["search_time"],
                     "total_articles": blog_search.get("total_articles_found", 0),
                     "processed_articles": blog_search.get("processed_articles", 0),
-                    "search_type": "blog_upload"
+                    "search_type": "blog_upload",
+                    "is_starred": blog_search.get("is_starred", False)
                 })
             else:
                 # This is a keyword search
@@ -1140,7 +1141,8 @@ async def get_comprehensive_history():
                     "processed_articles": blog_search.get("processed_sources", 0),
                     "search_type": blog_search.get("search_type", "keyword_search"),
                     "scholar_papers": blog_search.get("scholar_papers_found", 0),
-                    "patents": blog_search.get("patents_found", 0)
+                    "patents": blog_search.get("patents_found", 0),
+                    "is_starred": blog_search.get("is_starred", False)
                 })
         
         # Add thesis uploads
@@ -1152,7 +1154,8 @@ async def get_comprehensive_history():
                 "content": thesis.get("summary", ""),
                 "full_content": thesis.get("full_content", ""),
                 "timestamp": thesis.get("upload_time", ""),
-                "file_type": thesis.get("file_type", "text")
+                "file_type": thesis.get("file_type", "text"),
+                "is_starred": thesis.get("is_starred", False)
             })
         
         # Add articles
@@ -1201,7 +1204,8 @@ async def add_thesis_text(request: dict):
             "upload_time": datetime.now().isoformat(),
             "summary": f"Processed {len(text)} characters from text input",
             "full_content": text,  # Store the complete thesis text
-            "title": "Solar Thesis"  # Default title for text input
+            "title": "Solar Thesis",  # Default title for text input
+            "is_starred": False
         }
         thesis_uploads.append(thesis_info)
         print(f"📝 Thesis text tracked for history: {thesis_info}")
