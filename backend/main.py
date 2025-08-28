@@ -2187,36 +2187,68 @@ async def catch_all_routes(full_path: str):
     # For all other routes, serve the frontend (SPA routing)
     return FileResponse("frontend/index.html")
 
+@app.get("/api/search/test")
+async def test_search_endpoint():
+    """Test endpoint to verify search functionality"""
+    try:
+        print("🧪 Testing search endpoint...")
+        return {
+            "status": "success",
+            "message": "Search endpoint is working",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        print(f"❌ Test endpoint error: {e}")
+        return {"status": "error", "message": str(e)}
+
 @app.post("/api/search/keyword")
 async def search_by_keyword(request: dict):
     """Search Google Scholar and Google Patents by keyword and process through thesis matching"""
     try:
+        print(f"🔍 Received search request: {request}")
+        print(f"🔍 Request type: {type(request)}")
+        print(f"🔍 Request keys: {list(request.keys()) if isinstance(request, dict) else 'Not a dict'}")
+        
         keyword = request.get("keyword", "").strip()
         if not keyword:
+            print("❌ Empty keyword received")
             raise HTTPException(status_code=400, detail="Search keyword cannot be empty")
         
         print(f"🔍 Starting keyword search for: '{keyword}'")
         print(f"   Target: 30 Google Scholar papers + 30 Google Patents = 60 total sources")
         
         # Import search functions
-        from scraper import search_google_scholar, search_google_patents
+        try:
+            from scraper import search_google_scholar, search_google_patents
+            print("✅ Successfully imported search functions")
+        except ImportError as e:
+            print(f"❌ Failed to import search functions: {e}")
+            raise HTTPException(status_code=500, detail=f"Failed to import search functions: {e}")
         
         # Search Google Scholar for recent papers
         print(f"📚 Searching Google Scholar for recent papers...")
         try:
+            print(f"   🔍 Calling search_google_scholar with keyword: '{keyword}', max_results: 30")
             scholar_papers = await search_google_scholar(keyword, max_results=30)
             print(f"   ✅ Found {len(scholar_papers)} Google Scholar papers")
+            print(f"   📊 Scholar papers data: {scholar_papers[:2] if scholar_papers else 'None'}")  # Show first 2 papers
         except Exception as e:
             print(f"   ❌ Google Scholar search failed: {e}")
+            import traceback
+            traceback.print_exc()
             scholar_papers = []
         
         # Search Google Patents for recent patents
         print(f"🔬 Searching Google Patents for recent patents...")
         try:
+            print(f"   🔍 Calling search_google_patents with keyword: '{keyword}', max_results: 30")
             patent_results = await search_google_patents(keyword, max_results=30)
             print(f"   ✅ Found {len(patent_results)} Google Patents")
+            print(f"   📊 Patent results data: {patent_results[:2] if patent_results else 'None'}")  # Show first 2 patents
         except Exception as e:
             print(f"   ❌ Google Patents search failed: {e}")
+            import traceback
+            traceback.print_exc()
             patent_results = []
         
         # Combine all sources

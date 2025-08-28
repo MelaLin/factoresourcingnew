@@ -630,24 +630,28 @@ async def search_google_scholar(keyword: str, max_results: int = 30) -> List[Dic
                         print(f"   📚 Found: {title[:50]}...")
                         
                     except Exception as e:
-                        print(f"   ❌ Error parsing result {i}: {e}")
+                        print(f"   ❌ Error processing result {i+1}: {e}")
                         continue
                 
-                print(f"✅ Google Scholar search completed: {len(results)} results found")
+                print(f"📚 Total Google Scholar results found: {len(results)}")
                 
-                # If no results found, fall back to mock data
+                # If no results found, return mock data for testing
                 if len(results) == 0:
-                    print("🔄 No real results found, falling back to mock data...")
-                    try:
-                        from mock_data import get_mock_scholar_results
-                        mock_results = get_mock_scholar_results(keyword, max_results)
-                        print(f"✅ Mock data fallback successful: {len(mock_results)} results")
-                        return mock_results
-                    except ImportError:
-                        print("❌ Mock data module not available")
-                        return results
+                    print("⚠️  No real results found, returning mock data for testing")
+                    mock_results = []
+                    for i in range(min(max_results, 10)):  # Return up to 10 mock results
+                        mock_results.append({
+                            "title": f"Mock Scholar Paper {i+1} on {keyword}",
+                            "url": f"https://scholar.google.com/mock_{i+1}",
+                            "authors": [f"Mock Author {i+1}"],
+                            "abstract": f"This is a mock abstract for research on {keyword}. This paper discusses various aspects of {keyword} and its applications in modern technology.",
+                            "year": 2024 - i,
+                            "citations": max(0, 100 - i * 10),
+                            "source": "Google Scholar (Mock)"
+                        })
+                    return mock_results
                 
-                return results
+
                 
     except Exception as e:
         print(f"❌ Error searching Google Scholar: {e}")
