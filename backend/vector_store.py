@@ -1,6 +1,6 @@
 import faiss
 import numpy as np
-from ai_utils import embed_text, parse_thesis, calculate_semantic_similarity, analyze_thesis_alignment
+from ai_utils import embed_text, parse_thesis, calculate_text_similarity, analyze_thesis_alignment
 
 DIM = 1536
 index = faiss.IndexFlatL2(DIM)
@@ -114,25 +114,25 @@ def find_relevant_articles(articles):
         else:
             detailed_scores["keyword_overlap"] = 0.0
         
-        # Strategy 3: Semantic similarity with thesis points
-        semantic_scores = []
-        best_semantic_score = 0.0
-        best_semantic_point = ""
+        # Strategy 3: Text similarity with thesis points
+        text_scores = []
+        best_text_score = 0.0
+        best_text_point = ""
         for point in thesis_points[:3]:  # Check top 3 points
             try:
-                similarity = calculate_semantic_similarity(article['summary'], point)
-                semantic_scores.append(similarity)
+                similarity = calculate_text_similarity(article['summary'], point)
+                text_scores.append(similarity)
                 match_scores.append(similarity * 0.2)  # 20% weight
-                if similarity > best_semantic_score:
-                    best_semantic_score = similarity
-                    best_semantic_point = point[:50]
+                if similarity > best_text_score:
+                    best_text_score = similarity
+                    best_text_point = point[:50]
             except Exception as e:
-                print(f"   ❌ Semantic similarity error: {e}")
+                print(f"   ❌ Text similarity error: {e}")
         
-        detailed_scores["semantic_similarity"] = max(semantic_scores) if semantic_scores else 0.0
+        detailed_scores["text_similarity"] = max(text_scores) if text_scores else 0.0
         
-        if best_semantic_score > 0:
-            match_reasons.append(f"Semantic similarity: {best_semantic_score:.2f}")
+        if best_text_score > 0:
+            match_reasons.append(f"Text similarity: {best_text_score:.2f}")
         
         # Strategy 4: Content relevance (summary length and quality)
         summary_length = len(article['summary'])
@@ -198,7 +198,7 @@ def find_relevant_articles(articles):
             "analysis": {
                 "total_score": final_score,
                 "strategies_used": len(match_scores),
-                "best_match_type": "vector" if detailed_scores.get("vector_similarity", 0) > 0.5 else "keyword" if detailed_scores.get("keyword_overlap", 0) > 0.3 else "semantic"
+                "best_match_type": "vector" if detailed_scores.get("vector_similarity", 0) > 0.5 else "keyword" if detailed_scores.get("keyword_overlap", 0) > 0.3 else "text"
             }
         }
         

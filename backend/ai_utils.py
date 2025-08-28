@@ -37,37 +37,50 @@ def summarize_text(text):
             print(f"📝 Generated basic fallback summary: {len(summary)} characters")
             return (summary, keywords)
     
+    # Use pattern-based summary generation instead of GPT
     try:
-        prompt = f"""
-        Create a comprehensive, business-focused summary of the following text. Focus on:
-        - Main business development or announcement
-        - Key financial figures, investments, or deal values
-        - Companies, technologies, and market implications
-        - Strategic significance and industry impact
-        - Timeline and expected outcomes
+        # Enhanced pattern-based summary generation
+        words = text.split()
         
-        Text to summarize:
-        {text[:4000]}
+        # Extract key business indicators
+        business_keywords = ['funding', 'investment', 'raise', 'million', 'billion', 'acquisition', 'merger', 'ipo', 'revenue', 'profit', 'startup', 'venture', 'capital', 'series', 'round']
+        financial_keywords = ['dollars', 'euros', 'funding', 'investment', 'valuation', 'market cap', 'revenue', 'profit', 'loss', 'growth']
+        company_keywords = ['company', 'startup', 'firm', 'corporation', 'inc', 'corp', 'llc', 'ltd']
         
-        Provide a detailed summary in 3-4 sentences that captures the business significance and key details.
-        """
+        # Find sentences with business indicators
+        sentences = text.split('.')
+        business_sentences = []
         
-        response = openai.chat.completions.create(
-            model="gpt-4o",  # Use GPT-4o for best performance
-            messages=[
-                {"role": "system", "content": "You are an expert at creating accurate, informative summaries. Focus on factual information and key details."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=200,
-            temperature=0.1  # Lower temperature for more consistent, accurate output
-        )
+        for sentence in sentences:
+            sentence_lower = sentence.lower()
+            if any(keyword in sentence_lower for keyword in business_keywords + financial_keywords + company_keywords):
+                business_sentences.append(sentence.strip())
         
-        summary = response.choices[0].message.content
-        # Extract keywords from summary
-        keywords = extract_keywords_from_summary(summary)
+        # Generate summary based on content analysis
+        if len(words) > 200:
+            # Take first 150 words and last 50 words for better context
+            first_part = ' '.join(words[:150])
+            last_part = ' '.join(words[-50:])
+            summary = f"{first_part}... {last_part}"
+        elif len(words) > 100:
+            summary = ' '.join(words[:100]) + "..."
+        else:
+            summary = text
+        
+        # If we found business sentences, use them to enhance summary
+        if business_sentences:
+            business_summary = '. '.join(business_sentences[:2])  # Use top 2 business sentences
+            if len(business_summary) < len(summary):
+                summary = business_summary
+        
+        # Extract basic keywords
+        keywords = extract_keywords_from_text(text)
+        
+        print(f"📝 Generated pattern-based summary: {len(summary)} characters")
         return summary, keywords
+        
     except Exception as e:
-        print(f"OpenAI API error: {e}")
+        print(f"Error in pattern-based summary: {e}")
         # Fallback to mock response
         # Enhanced fallback summary
         words = text.split()
@@ -164,79 +177,60 @@ def extract_companies(text, max_companies=10):
         return unique_companies[:max_companies]
     
     try:
-        # Enhanced prompt for better company detection
-        prompt = f"""
-        Extract ONLY real, specific company names from this text. 
-        
-        IMPORTANT RULES:
-        - Return ONLY actual company names, not generic terms
-        - DO NOT include words like "Capital", "Company", "Corp", "Inc", "LLC" alone
-        - DO NOT include generic business terms like "Energy", "Solutions", "Industries", "Green" alone
-        - DO NOT include single words that are common business terms
-        - Focus on recognizable brand names, startups, and established companies
-        - Include parent companies and subsidiaries when mentioned
-        - If unsure, exclude rather than include
-        - Return company names as they appear in the text (with proper capitalization)
-        
-        Text to analyze:
-        {text[:4000]}
-        
-        Return a JSON array of company names only, no explanations.
-        """
-        
-        response = openai.chat.completions.create(
-            model="gpt-4o",  # Use GPT-4o for best performance
-            messages=[
-                {"role": "system", "content": "You are an expert at identifying real company names from text. Be very selective and only return actual companies. Never return generic business terms alone."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=200,
-            temperature=0.1
-        )
-        
-        companies_text = response.choices[0].message.content.strip()
-        
-        # Parse JSON response
+        # Use pattern-based company extraction instead of GPT
         try:
-            companies = json.loads(companies_text)
-            if isinstance(companies, list):
-                # Filter out generic terms and validate
-                filtered_companies = []
-                generic_terms = {
-                    'capital', 'company', 'corp', 'inc', 'llc', 'ltd', 'group', 'holdings',
-                    'energy', 'solutions', 'industries', 'green', 'sustainable', 'renewable',
-                    'technology', 'tech', 'systems', 'services', 'partners', 'ventures',
-                    'fund', 'investment', 'management', 'consulting', 'advisory'
-                }
-                
-                for company in companies:
-                    if isinstance(company, str) and company.strip():
-                        company_clean = company.strip()
-                        # Skip if it's just a generic term
-                        if company_clean.lower() in generic_terms:
-                            continue
-                        # Skip if it's too short or too generic
-                        if len(company_clean) < 3 or company_clean.lower() in ['the', 'and', 'or', 'for', 'with']:
-                            continue
-                        # Skip if it's just a common word
-                        if len(company_clean.split()) == 1 and company_clean.lower() in generic_terms:
-                            continue
-                        filtered_companies.append(company_clean)
-                
-                return filtered_companies[:max_companies]
-        except json.JSONDecodeError:
-            # Fallback: try to extract from text response
-            lines = companies_text.split('\n')
+            # Enhanced pattern-based company detection
+            words = text.split()
             companies = []
-            for line in lines:
-                line = line.strip()
-                if line and not line.startswith('[') and not line.startswith(']') and not line.startswith('{') and not line.startswith('}'):
-                    # Remove quotes and commas
-                    company = line.strip('",').strip()
-                    if company and len(company) > 2:
-                        companies.append(company)
             
-            return companies[:max_companies]
+            # Look for company patterns
+            for i, word in enumerate(words):
+                word_clean = word.strip('.,!?;:').strip()
+                if len(word_clean) > 3:
+                    # Check for company suffixes
+                    if any(suffix in word_clean.lower() for suffix in ['inc', 'corp', 'llc', 'ltd', 'co', 'company']):
+                        # Get the full company name (previous word + current word)
+                        if i > 0:
+                            company_name = f"{words[i-1]} {word_clean}"
+                            if company_name not in companies:
+                                companies.append(company_name)
+                        else:
+                            if word_clean not in companies:
+                                companies.append(word_clean)
+                    
+                    # Look for capitalized words that might be company names
+                    elif word_clean[0].isupper() and len(word_clean) > 4:
+                        # Check if it's not a common word
+                        common_words = {'the', 'and', 'or', 'for', 'with', 'from', 'this', 'that', 'they', 'have', 'will', 'been', 'said', 'time', 'year', 'people', 'government', 'business', 'technology', 'energy', 'market', 'industry', 'company', 'investment', 'funding', 'startup', 'venture', 'capital'}
+                        if word_clean.lower() not in common_words:
+                            if word_clean not in companies:
+                                companies.append(word_clean)
+            
+            # Filter out generic terms
+            generic_terms = {
+                'capital', 'company', 'corp', 'inc', 'llc', 'ltd', 'group', 'holdings',
+                'energy', 'solutions', 'industries', 'green', 'sustainable', 'renewable',
+                'technology', 'tech', 'systems', 'services', 'partners', 'ventures',
+                'fund', 'investment', 'management', 'consulting', 'advisory'
+            }
+            
+            filtered_companies = []
+            for company in companies:
+                company_lower = company.lower()
+                # Skip if it's just generic terms
+                if any(term in company_lower for term in generic_terms):
+                    continue
+                # Skip if it's too short
+                if len(company) < 3:
+                    continue
+                filtered_companies.append(company)
+            
+            print(f"🔍 Pattern-based company extraction found {len(filtered_companies)} companies")
+            return filtered_companies[:max_companies]
+            
+        except Exception as e:
+            print(f"Error in pattern-based company extraction: {e}")
+            return []
             
     except Exception as e:
         print(f"Error extracting companies: {e}")
@@ -288,43 +282,41 @@ def parse_thesis(thesis_text):
         print(f"Simple thesis parsing: {len(points)} points, {len(keywords)} keywords")
         return points, keywords
     
+    # Use pattern-based thesis parsing instead of GPT
     try:
-        prompt = f"""
-        Parse this thesis text into 3-5 key points and extract 5-8 important keywords/concepts.
-        Format the response as:
-        POINTS:
-        - Point 1
-        - Point 2
-        - Point 3
-        
-        KEYWORDS:
-        keyword1, keyword2, keyword3, keyword4, keyword5
-        
-        Thesis text:
-        {thesis_text}
-        """
-        
-        response = openai.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        
-        content = response.choices[0].message.content
-        
-        # Parse points
-        points_section = content.split('POINTS:')[1].split('KEYWORDS:')[0] if 'POINTS:' in content else ""
+        # Enhanced pattern-based thesis parsing
         points = []
-        for line in points_section.split('\n'):
+        lines = thesis_text.split('\n')
+        
+        # Look for meaningful content
+        for line in lines:
             line = line.strip()
-            if line.startswith('-') and len(line) > 3:
-                points.append(line[1:].strip())
+            if line and len(line) > 10:  # Only meaningful lines
+                # Skip common headers and metadata
+                skip_patterns = ['abstract:', 'introduction:', 'conclusion:', 'references:', 'bibliography:', 'chapter', 'section']
+                if not any(pattern in line.lower() for pattern in skip_patterns):
+                    points.append(line)
         
-        # Parse keywords
-        keywords_section = content.split('KEYWORDS:')[1] if 'KEYWORDS:' in content else ""
-        keywords = []
-        if keywords_section:
-            keywords = [k.strip() for k in keywords_section.split(',') if k.strip()]
+        # If we don't have enough points, split longer lines
+        if len(points) < 3:
+            # Split very long lines into smaller points
+            new_points = []
+            for point in points:
+                if len(point) > 200:
+                    # Split by sentences
+                    sentences = point.split('.')
+                    for sentence in sentences:
+                        sentence = sentence.strip()
+                        if len(sentence) > 20:
+                            new_points.append(sentence)
+                else:
+                    new_points.append(point)
+            points = new_points
         
+        # Extract keywords using pattern analysis
+        keywords = extract_keywords_from_text(thesis_text, max_keywords=8)
+        
+        print(f"Pattern-based thesis parsing: {len(points)} points, {len(keywords)} keywords")
         return points, keywords
         
     except Exception as e:
@@ -420,74 +412,6 @@ def calculate_text_similarity(text1: str, text2: str) -> float:
     except Exception as e:
         print(f"Error in pattern-based similarity: {e}")
         # Ultimate fallback: simple word overlap
-        words1 = set(text1.lower().split())
-        words2 = set(text2.lower().split())
-        intersection = words1.intersection(words2)
-        union = words1.union(words2)
-        if len(union) == 0:
-            return 0.0
-        return len(intersection) / len(union)
-
-def calculate_semantic_similarity(text1, text2):
-    """Calculate semantic similarity between two texts using keyword overlap and content analysis"""
-    if not openai.api_key:
-        # Simple similarity calculation based on word overlap
-        words1 = set(text1.lower().split())
-        words2 = set(text2.lower().split())
-        
-        # Remove common stop words
-        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'}
-        words1 = words1 - stop_words
-        words2 = words2 - stop_words
-        
-        intersection = words1.intersection(words2)
-        union = words1.union(words2)
-        
-        if len(union) == 0:
-            return 0.0
-        
-        # Calculate Jaccard similarity
-        jaccard = len(intersection) / len(union)
-        
-        # Boost similarity for important keywords
-        important_words = {'renewable', 'energy', 'sustainable', 'climate', 'carbon', 'technology', 'business', 'solutions', 'innovation', 'startup', 'funding', 'market'}
-        important_overlap = len(intersection.intersection(important_words))
-        
-        # Boost score if important words match
-        if important_overlap > 0:
-            jaccard += (important_overlap * 0.08)
-        
-        return max(0.0, min(jaccard, 1.0))
-    
-    try:
-        prompt = f"""
-        Rate the semantic similarity between these two texts on a scale of 0.0 to 1.0, where 1.0 is very similar and 0.0 is completely different.
-        Consider:
-        - Topic overlap
-        - Key concepts
-        - Intent/purpose
-        - Target audience
-        
-        Text 1: {text1}
-        Text 2: {text2}
-        
-        Return only a number between 0.0 and 1.0.
-        """
-        
-        response = openai.chat.completions.create(
-            model="gpt-4",
-            messages=[{"role": "user", "content": prompt}],
-        )
-        
-        result = response.choices[0].message.content.strip()
-        try:
-            return float(result)
-        except ValueError:
-            return 0.5  # Default if parsing fails
-            
-    except Exception as e:
-        print(f"Error calculating similarity: {e}")
-        # Fallback similarity
         words1 = set(text1.lower().split())
         words2 = set(text2.lower().split())
         intersection = words1.intersection(words2)
@@ -616,33 +540,50 @@ def extract_keywords_from_summary(summary, max_keywords=8):
         print(f"🔑 Generated fallback keywords: {keywords[:max_keywords]}")
         return keywords[:max_keywords]
     
+    # Use pattern-based keyword extraction instead of GPT
     try:
-        prompt = f"""
-        Extract 5-8 most relevant keywords from this summary. Focus on:
-        - Technical terms and technologies
-        - Industry-specific vocabulary
-        - Key concepts and themes
-        - Company or product names if mentioned
+        # Enhanced pattern-based keyword extraction
+        words = summary.lower().split()
         
-        Summary: {summary}
+        # Define important keyword categories
+        technical_terms = ['technology', 'innovation', 'startup', 'funding', 'investment', 'venture', 'capital', 'series', 'round', 'acquisition', 'merger', 'ipo', 'revenue', 'profit', 'growth', 'market', 'industry', 'sector']
+        renewable_terms = ['solar', 'wind', 'battery', 'energy', 'sustainable', 'green', 'renewable', 'climate', 'carbon', 'emissions', 'efficiency', 'storage', 'grid', 'power', 'electric', 'vehicle', 'ev']
+        business_terms = ['company', 'startup', 'firm', 'corporation', 'inc', 'corp', 'llc', 'ltd', 'fund', 'management', 'consulting', 'advisory', 'partners', 'ventures', 'holdings', 'group']
         
-        Return only the keywords separated by commas, no explanations.
-        """
+        # Filter out common words and short words
+        stop_words = {'the', 'a', 'an', 'and', 'or', 'but', 'in', 'on', 'at', 'to', 'for', 'of', 'with', 'by', 'is', 'are', 'was', 'were', 'be', 'been', 'have', 'has', 'had', 'do', 'does', 'did', 'will', 'would', 'could', 'should', 'may', 'might', 'can', 'this', 'that', 'these', 'those', 'i', 'you', 'he', 'she', 'it', 'we', 'they', 'me', 'him', 'her', 'us', 'them'}
         
-        response = openai.chat.completions.create(
-            model="gpt-4o",  # Use GPT-4o for best performance
-            messages=[
-                {"role": "system", "content": "You are an expert at extracting relevant keywords from text."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=100,
-            temperature=0.1
-        )
+        # Score words based on importance
+        word_scores = {}
+        for word in words:
+            word_clean = word.strip('.,!?;:').strip()
+            if len(word_clean) > 3 and word_clean not in stop_words:
+                score = 1
+                
+                # Boost score for important terms
+                if word_clean in technical_terms:
+                    score += 3
+                if word_clean in renewable_terms:
+                    score += 3
+                if word_clean in business_terms:
+                    score += 2
+                
+                # Boost score for longer words (likely technical terms)
+                if len(word_clean) > 6:
+                    score += 1
+                
+                # Boost score for capitalized words (likely proper nouns)
+                if word_clean[0].isupper():
+                    score += 2
+                
+                word_scores[word_clean] = score
         
-        keywords_text = response.choices[0].message.content.strip()
-        # Split by commas and clean up
-        keywords = [kw.strip().lower() for kw in keywords_text.split(',') if kw.strip()]
-        return keywords[:max_keywords]
+        # Sort by score and return top keywords
+        sorted_words = sorted(word_scores.items(), key=lambda x: x[1], reverse=True)
+        keywords = [word for word, score in sorted_words[:max_keywords]]
+        
+        print(f"🔑 Pattern-based keyword extraction found {len(keywords)} keywords")
+        return keywords
         
     except Exception as e:
         print(f"Error extracting keywords: {e}")

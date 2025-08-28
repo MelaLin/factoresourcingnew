@@ -72,7 +72,7 @@ export const Revisions = () => {
 
   useEffect(() => {
     fetchRevisions();
-  }, []);
+  }, [API_BASE_URL]); // Only re-run if API_BASE_URL changes
 
   const fetchRevisions = async () => {
     try {
