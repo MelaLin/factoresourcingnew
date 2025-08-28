@@ -964,7 +964,13 @@ async def upload_blog(request: BlogUploadRequest):
         # Debug: Print all blog searches
         print(f"🔍 All blog searches after adding:")
         for i, blog in enumerate(blog_searches):
-            print(f"   {i+1}. ID: {blog['id']}, URL: {blog['url']}, Starred: {blog.get('is_starred', False)}")
+            try:
+                url = blog.get('url', 'No URL field')
+                starred = blog.get('is_starred', False)
+                print(f"   {i+1}. ID: {blog['id']}, URL: {url}, Starred: {starred}")
+            except Exception as debug_err:
+                print(f"   {i+1}. ID: {blog.get('id', 'Unknown')}, Error: {debug_err}")
+                print(f"      Blog data: {blog}")
         
         return BlogUploadResponse(
             message=f"Successfully processed {successful_count} out of {total_articles} articles",
@@ -1118,60 +1124,80 @@ async def get_comprehensive_history():
         
         # Add blog searches and blog uploads
         for blog_search in blog_searches:
-            if "url" in blog_search and blog_search.get("url"):
-                # This is a blog URL upload
-                history.append({
-                    "id": blog_search["id"],
-                    "type": "blog_upload",
-                    "url": blog_search.get("url", "Unknown"),
-                    "timestamp": blog_search["search_time"],
-                    "total_articles": blog_search.get("total_articles_found", 0),
-                    "processed_articles": blog_search.get("processed_articles", 0),
-                    "search_type": "blog_upload",
-                    "is_starred": blog_search.get("is_starred", False)
-                })
-            else:
-                # This is a keyword search
-                history.append({
-                    "id": blog_search["id"],
-                    "type": "keyword_search",
-                    "keyword": blog_search.get("keyword", "Unknown"),
-                    "timestamp": blog_search["search_time"],
-                    "total_articles": blog_search.get("total_sources", 0),
-                    "processed_articles": blog_search.get("processed_sources", 0),
-                    "search_type": blog_search.get("search_type", "keyword_search"),
-                    "scholar_papers": blog_search.get("scholar_papers_found", 0),
-                    "patents": blog_search.get("patents_found", 0),
-                    "is_starred": blog_search.get("is_starred", False)
-                })
+            try:
+                if "url" in blog_search and blog_search.get("url"):
+                    # This is a blog URL upload
+                    history.append({
+                        "id": blog_search["id"],
+                        "type": "blog_upload",
+                        "url": blog_search.get("url", "Unknown"),
+                        "timestamp": blog_search["search_time"],
+                        "total_articles": blog_search.get("total_articles_found", 0),
+                        "processed_articles": blog_search.get("processed_articles", 0),
+                        "search_type": "blog_upload",
+                        "is_starred": blog_search.get("is_starred", False)
+                    })
+                else:
+                    # This is a keyword search
+                    history.append({
+                        "id": blog_search["id"],
+                        "type": "keyword_search",
+                        "keyword": blog_search.get("keyword", "Unknown"),
+                        "timestamp": blog_search["search_time"],
+                        "total_articles": blog_search.get("total_sources", 0),
+                        "processed_articles": blog_search.get("processed_sources", 0),
+                        "search_type": blog_search.get("search_type", "keyword_search"),
+                        "scholar_papers": blog_search.get("scholar_papers_found", 0),
+                        "patents": blog_search.get("patents_found", 0),
+                        "is_starred": blog_search.get("is_starred", False)
+                    })
+            except Exception as blog_err:
+                print(f"⚠️  Error processing blog search {blog_search.get('id', 'Unknown')}: {blog_err}")
+                print(f"   Blog data: {blog_search}")
+                # Skip malformed blog searches
+                continue
         
         # Add thesis uploads
         for thesis in thesis_uploads:
-            history.append({
-                "id": thesis["id"],
-                "type": "thesis",
-                "title": f"Thesis: {thesis.get('title', thesis.get('filename', 'Unknown'))}",
-                "content": thesis.get("summary", ""),
-                "full_content": thesis.get("full_content", ""),
-                "timestamp": thesis.get("upload_time", ""),
-                "file_type": thesis.get("file_type", "text"),
-                "is_starred": thesis.get("is_starred", False)
-            })
+            try:
+                history.append({
+                    "id": thesis["id"],
+                    "type": "thesis",
+                    "title": f"Thesis: {thesis.get('title', thesis.get('filename', 'Unknown'))}",
+                    "content": thesis.get("summary", ""),
+                    "full_content": thesis.get("full_content", ""),
+                    "timestamp": thesis.get("upload_time", ""),
+                    "file_type": thesis.get("file_type", "text"),
+                    "is_starred": thesis.get("is_starred", False)
+                })
+            except Exception as thesis_err:
+                print(f"⚠️  Error processing thesis {thesis.get('id', 'Unknown')}: {thesis_err}")
+                print(f"   Thesis data: {thesis}")
+                # Skip malformed thesis uploads
+                continue
         
         # Add articles
         for article in articles:
-            history.append({
-                "id": f"article_{len(history)}",
-                "type": "source",
-                "url": article["url"],
-                "title": article["title"],
-                "summary": article.get("summary", ""),
-                "source_blog": article.get("source_blog", ""),
-                "source_type": article.get("source_type", "unknown"),
-                "timestamp": article.get("publish_date", datetime.now().isoformat())
-            })
+            try:
+                history.append({
+                    "id": f"article_{len(history)}",
+                    "type": "source",
+                    "url": article["url"],
+                    "title": article["title"],
+                    "summary": article.get("summary", ""),
+                    "source_blog": article.get("source_blog", ""),
+                    "source_type": article.get("source_type", "unknown"),
+                    "timestamp": article.get("publish_date", datetime.now().isoformat())
+                })
+            except Exception as article_err:
+                print(f"⚠️  Error processing article {article.get('url', 'Unknown')}: {article_err}")
+                print(f"   Article data: {article}")
+                # Skip malformed articles
+                continue
         
         print(f"📊 Returning {len(history)} history items")
+        print(f"📚 Sample item structure: {history[0] if history else 'No items'}")
+        
         return history
         
     except Exception as e:
