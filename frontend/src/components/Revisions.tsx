@@ -91,8 +91,10 @@ export const Revisions = () => {
         const articlesList: Article[] = [];
         
         historyData.forEach((item: any) => {
+          console.log(`🔍 Processing item: ${item.type} - ${item.id}`);
           if (item.type === 'blog_upload') {
             // This is a blog URL upload
+            console.log(`✅ Adding blog upload: ${item.url}`);
             blogs.push({
               id: item.id,
               url: item.url || 'Unknown',
@@ -147,6 +149,9 @@ export const Revisions = () => {
         setArticles(articlesList);
         
         console.log(`📊 Processed: ${blogs.length} blogs, ${theses.length} theses, ${articlesList.length} articles`);
+        console.log(`📝 Blog revisions:`, blogs);
+        console.log(`📚 Thesis revisions:`, theses);
+        console.log(`📰 Articles:`, articlesList);
       } else {
         throw new Error(`History fetch failed: ${historyResponse.status}`);
       }
@@ -699,6 +704,7 @@ export const Revisions = () => {
                         <>
                           <Button
                             variant="outline"
+
                             size="sm"
                             onClick={() => starThesis(thesis.id)}
                             className={`${thesis.is_starred ? 'text-yellow-600 bg-yellow-50' : 'text-yellow-600 hover:bg-yellow-50'}`}
