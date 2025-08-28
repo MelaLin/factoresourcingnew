@@ -2192,11 +2192,34 @@ async def test_search_endpoint():
     """Test endpoint to verify search functionality"""
     try:
         print("🧪 Testing search endpoint...")
-        return {
-            "status": "success",
-            "message": "Search endpoint is working",
-            "timestamp": datetime.now().isoformat()
-        }
+        
+        # Test mock data functionality
+        try:
+            from mock_data import get_mock_scholar_results, get_mock_patent_results
+            test_keyword = "solar"
+            scholar_mock = get_mock_scholar_results(test_keyword, 5)
+            patent_mock = get_mock_patent_results(test_keyword, 5)
+            
+            return {
+                "status": "success",
+                "message": "Search endpoint is working",
+                "timestamp": datetime.now().isoformat(),
+                "mock_data_test": {
+                    "scholar_results": len(scholar_mock),
+                    "patent_results": len(patent_mock),
+                    "sample_scholar": scholar_mock[0] if scholar_mock else None,
+                    "sample_patent": patent_mock[0] if patent_mock else None
+                }
+            }
+        except Exception as mock_e:
+            print(f"❌ Mock data test failed: {mock_e}")
+            return {
+                "status": "partial_success",
+                "message": "Search endpoint working but mock data failed",
+                "timestamp": datetime.now().isoformat(),
+                "mock_data_error": str(mock_e)
+            }
+            
     except Exception as e:
         print(f"❌ Test endpoint error: {e}")
         return {"status": "error", "message": str(e)}
@@ -2236,7 +2259,14 @@ async def search_by_keyword(request: dict):
             print(f"   ❌ Google Scholar search failed: {e}")
             import traceback
             traceback.print_exc()
-            scholar_papers = []
+            print("   🔄 Falling back to mock data...")
+            try:
+                from mock_data import get_mock_scholar_results
+                scholar_papers = get_mock_scholar_results(keyword, 30)
+                print(f"   ✅ Mock data fallback successful: {len(scholar_papers)} results")
+            except Exception as mock_e:
+                print(f"   ❌ Mock data fallback also failed: {mock_e}")
+                scholar_papers = []
         
         # Search Google Patents for recent patents
         print(f"🔬 Searching Google Patents for recent patents...")
@@ -2249,7 +2279,14 @@ async def search_by_keyword(request: dict):
             print(f"   ❌ Google Patents search failed: {e}")
             import traceback
             traceback.print_exc()
-            patent_results = []
+            print("   🔄 Falling back to mock data...")
+            try:
+                from mock_data import get_mock_patent_results
+                patent_results = get_mock_patent_results(keyword, 30)
+                print(f"   ✅ Mock data fallback successful: {len(patent_results)} results")
+            except Exception as mock_e:
+                print(f"   ❌ Mock data fallback also failed: {mock_e}")
+                patent_results = []
         
         # Combine all sources
         all_sources = []

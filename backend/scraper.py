@@ -573,9 +573,29 @@ async def search_google_scholar(keyword: str, max_results: int = 30) -> List[Dic
                 # Parse with BeautifulSoup
                 soup = BeautifulSoup(html, 'html.parser')
                 
+                # Check if we got blocked or got an error page
+                page_title = soup.find('title')
+                if page_title:
+                    page_title_text = page_title.get_text().lower()
+                    if any(blocked in page_title_text for blocked in ['captcha', 'blocked', 'robot', 'unusual traffic', 'verify']):
+                        print("🚫 Google Scholar blocked the request (detected captcha/blocking page)")
+                        raise Exception("Google Scholar blocked the request")
+                
                 results = []
                 # Look for Google Scholar result divs
                 scholar_results = soup.find_all('div', class_='gs_r gs_or gs_scl')
+                
+                # If no results found with the expected class, try alternative selectors
+                if not scholar_results:
+                    print("🔍 No results with expected class, trying alternative selectors...")
+                    # Try different possible selectors
+                    scholar_results = soup.find_all('div', class_='gs_r')
+                    if not scholar_results:
+                        scholar_results = soup.find_all('div', class_='gs_or')
+                    if not scholar_results:
+                        scholar_results = soup.find_all('div', class_='gs_scl')
+                
+                print(f"🔍 Found {len(scholar_results)} potential result elements")
                 
                 for i, result in enumerate(scholar_results[:max_results]):
                     try:
@@ -638,20 +658,27 @@ async def search_google_scholar(keyword: str, max_results: int = 30) -> List[Dic
                 # If no results found, return mock data for testing
                 if len(results) == 0:
                     print("⚠️  No real results found, returning mock data for testing")
-                    mock_results = []
-                    for i in range(min(max_results, 10)):  # Return up to 10 mock results
-                        mock_results.append({
-                            "title": f"Mock Scholar Paper {i+1} on {keyword}",
-                            "url": f"https://scholar.google.com/mock_{i+1}",
-                            "authors": [f"Mock Author {i+1}"],
-                            "abstract": f"This is a mock abstract for research on {keyword}. This paper discusses various aspects of {keyword} and its applications in modern technology.",
-                            "year": 2024 - i,
-                            "citations": max(0, 100 - i * 10),
-                            "source": "Google Scholar (Mock)"
-                        })
-                    return mock_results
+                    try:
+                        from mock_data import get_mock_scholar_results
+                        mock_results = get_mock_scholar_results(keyword, max_results)
+                        print(f"✅ Mock data fallback successful: {len(mock_results)} results")
+                        return mock_results
+                    except ImportError:
+                        print("❌ Mock data module not available, creating basic mock data")
+                        mock_results = []
+                        for i in range(min(max_results, 20)):  # Return up to 20 mock results
+                            mock_results.append({
+                                "title": f"Mock Scholar Paper {i+1} on {keyword}",
+                                "url": f"https://scholar.google.com/mock_{i+1}",
+                                "authors": [f"Mock Author {i+1}"],
+                                "abstract": f"This is a mock abstract for research on {keyword}. This paper discusses various aspects of {keyword} and its applications in modern technology.",
+                                "year": 2024 - i,
+                                "citations": max(0, 100 - i * 10),
+                                "source": "Google Scholar (Mock)"
+                            })
+                        return mock_results
                 
-
+                return results
                 
     except Exception as e:
         print(f"❌ Error searching Google Scholar: {e}")
