@@ -531,7 +531,7 @@ def get_patent_search_urls(base_url: str, query: str = None) -> List[str]:
     
     return patent_urls
 
-async def search_google_scholar(keyword: str, max_results: int = 25) -> List[Dict]:
+async def search_google_scholar(keyword: str, max_results: int = 30) -> List[Dict]:
     """Search Google Scholar for academic papers"""
     try:
         print(f"🔍 Searching Google Scholar for: {keyword}")
@@ -663,7 +663,7 @@ async def search_google_scholar(keyword: str, max_results: int = 25) -> List[Dic
             print("❌ Mock data module not available")
             return []
 
-async def search_google_patents(keyword: str, max_results: int = 25) -> List[Dict]:
+async def search_google_patents(keyword: str, max_results: int = 30) -> List[Dict]:
     """Search Google Patents for recent patents related to a keyword"""
     try:
         print(f"🔬 Searching Google Patents for: {keyword}")

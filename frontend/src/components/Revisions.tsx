@@ -60,9 +60,10 @@ export const Revisions = () => {
   const [blogRevisions, setBlogRevisions] = useState<BlogRevision[]>([]);
   const [thesisRevisions, setThesisRevisions] = useState<ThesisRevision[]>([]);
   const [articles, setArticles] = useState<Article[]>([]);
+  const [googleSearchResults, setGoogleSearchResults] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [activeTab, setActiveTab] = useState<'blogs' | 'theses' | 'articles'>('blogs');
+  const [activeTab, setActiveTab] = useState<'blogs' | 'theses' | 'articles' | 'google-search'>('blogs');
   const [editingThesis, setEditingThesis] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState<string>('');
   const [editingContent, setEditingContent] = useState<string>('');
@@ -73,6 +74,36 @@ export const Revisions = () => {
   useEffect(() => {
     fetchRevisions();
   }, [API_BASE_URL]); // Only re-run if API_BASE_URL changes
+
+  useEffect(() => {
+    if (blogRevisions.length > 0) {
+      fetchGoogleSearchResults();
+    }
+  }, [blogRevisions]); // Fetch Google search results when blog revisions change
+
+  const fetchGoogleSearchResults = async () => {
+    try {
+      // Get all keyword searches
+      const keywordSearches = blogRevisions.filter(blog => blog.search_type === 'keyword_search');
+      
+      const allResults = [];
+      for (const search of keywordSearches) {
+        try {
+          const response = await fetch(`${API_BASE_URL}/api/search/thesis-alignment/${search.id}`);
+          if (response.ok) {
+            const data = await response.json();
+            allResults.push(data);
+          }
+        } catch (err) {
+          console.error(`Error fetching results for search ${search.id}:`, err);
+        }
+      }
+      
+      setGoogleSearchResults(allResults);
+    } catch (err) {
+      console.error('Error fetching Google search results:', err);
+    }
+  };
 
   const fetchRevisions = async () => {
     try {
@@ -553,6 +584,15 @@ export const Revisions = () => {
           <FileText className="h-4 w-4 mr-2" />
           Articles ({articles.length})
         </Button>
+        <Button
+          variant={activeTab === 'google-search' ? 'default' : 'ghost'}
+          size="sm"
+          onClick={() => setActiveTab('google-search')}
+          className="flex-1"
+        >
+          <Globe className="h-4 w-4 mr-2" />
+          Google Search ({googleSearchResults.length})
+        </Button>
       </div>
 
       {/* Blogs Tab */}
@@ -847,6 +887,105 @@ export const Revisions = () => {
                       {article.summary}
                     </p>
                   )}
+                </CardContent>
+              </Card>
+            ))
+          )}
+        </div>
+      )}
+
+      {/* Google Search Tab */}
+      {activeTab === 'google-search' && (
+        <div className="space-y-4">
+          {googleSearchResults.length === 0 ? (
+            <Card className="text-center py-12">
+              <CardContent>
+                <Globe className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+                <h3 className="text-lg font-semibold mb-2">No Google Search Results Yet</h3>
+                <p className="text-muted-foreground">
+                  Perform keyword searches to see Google Scholar and Patents results with thesis alignment
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            googleSearchResults.map((searchResult, searchIndex) => (
+              <Card key={searchIndex} className="transition-all duration-200 hover:shadow-md">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 mb-2">
+                        <Globe className="h-4 w-4 text-purple-600" />
+                        <CardTitle className="text-lg font-semibold">
+                          Keyword: "{searchResult.keyword}"
+                        </CardTitle>
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-800">
+                          {searchResult.total_sources} Sources
+                        </Badge>
+                        <Badge variant="outline" className="text-orange-600">
+                          {searchResult.starred_theses_count} Starred Theses
+                        </Badge>
+                      </div>
+                      
+                      <div className="text-sm text-muted-foreground">
+                        Found {searchResult.total_sources} sources with thesis alignment analysis
+                      </div>
+                    </div>
+                  </div>
+                </CardHeader>
+                
+                <CardContent>
+                  <div className="space-y-4">
+                    {searchResult.sources_with_alignments?.map((source, sourceIndex) => (
+                      <div key={sourceIndex} className="border rounded-lg p-4 bg-gray-50">
+                        <div className="flex items-start justify-between gap-4 mb-3">
+                          <div className="flex-1">
+                            <h4 className="font-semibold text-lg mb-2">{source.source_title}</h4>
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant="outline" className="text-sm">
+                                {source.source_type === 'google_scholar' ? '📚 Scholar Paper' : '🔬 Patent'}
+                              </Badge>
+                              {source.source_authors?.length > 0 && (
+                                <span className="text-sm text-muted-foreground">
+                                  Authors: {source.source_authors.join(', ')}
+                                </span>
+                              )}
+                            </div>
+                            <p className="text-sm text-foreground/80 mb-3">{source.source_summary}</p>
+                          </div>
+                        </div>
+                        
+                        {/* Thesis Alignments */}
+                        <div className="space-y-3">
+                          <h5 className="font-medium text-sm text-gray-700">Thesis Alignment Scores:</h5>
+                          {source.thesis_alignments?.map((alignment, alignIndex) => (
+                            <div key={alignIndex} className="bg-white rounded p-3 border">
+                              <div className="flex items-center justify-between mb-2">
+                                <span className="font-medium text-sm">{alignment.thesis_title}</span>
+                                <Badge 
+                                  variant={alignment.alignment_score > 0.7 ? 'default' : alignment.alignment_score > 0.4 ? 'secondary' : 'outline'}
+                                  className={alignment.alignment_score > 0.7 ? 'bg-green-100 text-green-800' : ''}
+                                >
+                                  Score: {(alignment.alignment_score * 100).toFixed(1)}%
+                                </Badge>
+                              </div>
+                              
+                              {alignment.matched_points?.length > 0 && (
+                                <div className="text-xs text-gray-600 mb-2">
+                                  <strong>Matched Points:</strong> {alignment.matched_points.join(', ')}
+                                </div>
+                              )}
+                              
+                              {alignment.alignment_reasons?.length > 0 && (
+                                <div className="text-xs text-gray-600">
+                                  <strong>Reasons:</strong> {alignment.alignment_reasons.join(', ')}
+                                </div>
+                              )}
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </CardContent>
               </Card>
             ))

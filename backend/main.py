@@ -2196,7 +2196,7 @@ async def search_by_keyword(request: dict):
             raise HTTPException(status_code=400, detail="Search keyword cannot be empty")
         
         print(f"🔍 Starting keyword search for: '{keyword}'")
-        print(f"   Target: 25 Google Scholar papers + 25 Google Patents = 50 total sources")
+        print(f"   Target: 30 Google Scholar papers + 30 Google Patents = 60 total sources")
         
         # Import search functions
         from scraper import search_google_scholar, search_google_patents
@@ -2204,7 +2204,7 @@ async def search_by_keyword(request: dict):
         # Search Google Scholar for recent papers
         print(f"📚 Searching Google Scholar for recent papers...")
         try:
-            scholar_papers = await search_google_scholar(keyword, max_results=25)
+            scholar_papers = await search_google_scholar(keyword, max_results=30)
             print(f"   ✅ Found {len(scholar_papers)} Google Scholar papers")
         except Exception as e:
             print(f"   ❌ Google Scholar search failed: {e}")
@@ -2213,7 +2213,7 @@ async def search_by_keyword(request: dict):
         # Search Google Patents for recent patents
         print(f"🔬 Searching Google Patents for recent patents...")
         try:
-            patent_results = await search_google_patents(keyword, max_results=25)
+            patent_results = await search_google_patents(keyword, max_results=30)
             print(f"   ✅ Found {len(patent_results)} Google Patents")
         except Exception as e:
             print(f"   ❌ Google Patents search failed: {e}")
@@ -2354,6 +2354,123 @@ async def search_by_keyword(request: dict):
         import traceback
         traceback.print_exc()
         raise HTTPException(status_code=500, detail=f"Error in keyword search: {str(e)}")
+
+@app.get("/api/search/thesis-alignment/{search_id}")
+async def get_thesis_alignment_for_search(search_id: str):
+    """Get thesis alignment scores for a specific keyword search"""
+    try:
+        print(f"🎯 Getting thesis alignment for search: {search_id}")
+        
+        # Find the keyword search
+        keyword_search = None
+        for search in blog_searches:
+            if search.get("id") == search_id:
+                keyword_search = search
+                break
+        
+        if not keyword_search:
+            raise HTTPException(status_code=404, detail="Keyword search not found")
+        
+        # Get all sources for this search
+        search_sources = []
+        for article in articles:
+            if article.get("source_keyword") == keyword_search.get("keyword"):
+                search_sources.append(article)
+        
+        if not search_sources:
+            raise HTTPException(status_code=404, detail="No sources found for this search")
+        
+        # Get starred theses
+        starred_theses = []
+        for thesis in thesis_uploads:
+            if thesis.get("is_starred"):
+                starred_theses.append(thesis)
+        
+        if not starred_theses:
+            return {
+                "message": "No starred theses found",
+                "search_id": search_id,
+                "keyword": keyword_search.get("keyword"),
+                "sources": [],
+                "thesis_alignments": []
+            }
+        
+        # Calculate thesis alignment for each source
+        alignment_results = []
+        for source in search_sources:
+            source_alignments = []
+            
+            for thesis in starred_theses:
+                try:
+                    # Get thesis points and keywords
+                    thesis_points = []
+                    thesis_keywords = []
+                    
+                    if thesis.get("content"):
+                        # Parse thesis content
+                        from ai_utils import parse_thesis
+                        thesis_points, thesis_keywords = parse_thesis(thesis.get("content"))
+                    
+                    # Calculate alignment
+                    from ai_utils import analyze_thesis_alignment
+                    alignment = analyze_thesis_alignment(
+                        source.get("summary", ""),
+                        thesis_points,
+                        thesis_keywords
+                    )
+                    
+                    source_alignments.append({
+                        "thesis_id": thesis.get("id"),
+                        "thesis_title": thesis.get("title", "").replace("Thesis: ", ""),
+                        "alignment_score": alignment.get("overall_score", 0.0),
+                        "matched_points": alignment.get("matched_points", []),
+                        "alignment_reasons": alignment.get("alignment_reasons", []),
+                        "detailed_scores": alignment.get("detailed_scores", {})
+                    })
+                    
+                except Exception as e:
+                    print(f"Error calculating alignment for thesis {thesis.get('id')}: {e}")
+                    source_alignments.append({
+                        "thesis_id": thesis.get("id"),
+                        "thesis_title": thesis.get("title", "").replace("Thesis: ", ""),
+                        "alignment_score": 0.0,
+                        "matched_points": [],
+                        "alignment_reasons": ["Error calculating alignment"],
+                        "detailed_scores": {}
+                    })
+            
+            # Sort alignments by score
+            source_alignments.sort(key=lambda x: x["alignment_score"], reverse=True)
+            
+            alignment_results.append({
+                "source_id": source.get("url"),
+                "source_title": source.get("title"),
+                "source_type": source.get("source_type"),
+                "source_summary": source.get("summary"),
+                "source_authors": source.get("authors", []),
+                "source_keywords": source.get("keywords", []),
+                "thesis_alignments": source_alignments
+            })
+        
+        # Sort results by best overall alignment
+        alignment_results.sort(
+            key=lambda x: max([a["alignment_score"] for a in x["thesis_alignments"]], default=0.0),
+            reverse=True
+        )
+        
+        return {
+            "search_id": search_id,
+            "keyword": keyword_search.get("keyword"),
+            "total_sources": len(search_sources),
+            "starred_theses_count": len(starred_theses),
+            "sources_with_alignments": alignment_results
+        }
+        
+    except Exception as e:
+        print(f"❌ Error getting thesis alignment: {e}")
+        import traceback
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Error getting thesis alignment: {str(e)}")
 
 if __name__ == "__main__":
     import uvicorn
