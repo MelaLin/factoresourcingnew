@@ -40,12 +40,27 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
 
+  const testBackend = async () => {
+    try {
+      console.log('🧪 Testing backend connectivity...');
+      const response = await fetch(`${API_BASE_URL}/api/search/test`);
+      const data = await response.json();
+      console.log('🧪 Backend test result:', data);
+      alert(`Backend test: ${data.status}\nMessage: ${data.message}`);
+    } catch (error) {
+      console.error('🧪 Backend test failed:', error);
+      alert(`Backend test failed: ${error.message}`);
+    }
+  };
+
   const searchScholar = async () => {
     if (!keyword.trim()) return;
     
     setIsSearching(true);
     try {
       console.log('🔍 Starting comprehensive keyword search for:', keyword);
+      console.log('🔍 API URL:', `${API_BASE_URL}/api/search/keyword`);
+      console.log('🔍 Request payload:', { keyword: keyword.trim() });
       
       const response = await fetch(`${API_BASE_URL}/api/search/keyword`, {
         method: 'POST',
@@ -55,30 +70,38 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
         body: JSON.stringify({ keyword: keyword.trim() }),
       });
 
+      console.log('🔍 Response status:', response.status);
+      console.log('🔍 Response headers:', Object.fromEntries(response.headers.entries()));
+
       if (response.ok) {
         const data = await response.json();
         console.log('✅ Keyword search successful:', data);
+        console.log('🔍 Raw response data:', data);
         
         // Extract scholar results from the comprehensive search
         const scholarSources = data.sources?.filter((source: any) => source.source_type === 'google_scholar') || [];
+        console.log('🔍 Scholar sources found:', scholarSources);
+        
         setScholarResults(scholarSources.map((source: any) => ({
           title: source.title,
           url: source.url,
-          authors: ['Author information available'],
+          authors: source.authors || ['Author information available'],
           abstract: source.summary,
-          year: new Date().getFullYear(),
+          year: source.publish_date || new Date().getFullYear(),
           citations: 0,
           source: 'Google Scholar'
         })));
         
         // Extract patent results
         const patentSources = data.sources?.filter((source: any) => source.source_type === 'google_patent') || [];
+        console.log('🔍 Patent sources found:', patentSources);
+        
         setPatentResults(patentSources.map((source: any) => ({
           title: source.title,
           url: source.url,
-          authors: ['Inventor information available'],
+          authors: source.authors || ['Inventor information available'],
           abstract: source.summary,
-          publish_date: new Date().toISOString(),
+          publish_date: source.publish_date || new Date().toISOString(),
           patent_number: source.url.split('/').pop() || 'Unknown',
           source: 'Google Patents'
         })));
@@ -90,10 +113,25 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
         
         console.log(`📊 Found ${scholarSources.length} scholar papers and ${patentSources.length} patents`);
       } else {
-        console.error('Keyword search failed:', response.status);
+        const errorText = await response.text();
+        console.error('❌ Keyword search failed:', response.status, response.statusText);
+        console.error('❌ Error response:', errorText);
+        
+        // Try to parse error as JSON
+        try {
+          const errorData = JSON.parse(errorText);
+          console.error('❌ Parsed error data:', errorData);
+        } catch (e) {
+          console.error('❌ Could not parse error response as JSON');
+        }
       }
     } catch (error) {
-      console.error('Error in keyword search:', error);
+      console.error('❌ Error in keyword search:', error);
+      console.error('❌ Error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack
+      });
     } finally {
       setIsSearching(false);
     }
@@ -201,6 +239,26 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
               </>
             )}
           </Button>
+          <Button 
+            onClick={testBackend} 
+            variant="outline"
+            className="min-w-[100px]"
+            title="Test backend connectivity"
+          >
+            🧪 Test
+          </Button>
+        </div>
+
+        {/* Debug Information */}
+        <div className="p-3 bg-gray-50 rounded-lg border">
+          <h4 className="text-sm font-medium mb-2">Debug Info</h4>
+          <div className="text-xs space-y-1">
+            <div>API Base URL: {API_BASE_URL}</div>
+            <div>Keyword: {keyword || 'None'}</div>
+            <div>Scholar Results: {scholarResults.length}</div>
+            <div>Patent Results: {patentResults.length}</div>
+            <div>Is Searching: {isSearching ? 'Yes' : 'No'}</div>
+          </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
