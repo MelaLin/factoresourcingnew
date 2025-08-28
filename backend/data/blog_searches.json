@@ -58,5 +58,14 @@
     "is_starred": false,
     "last_monitored": "2025-08-26T12:20:50.086362",
     "search_type": "keyword_search"
+  },
+  {
+    "id": "blog_5_1756338863",
+    "url": "https://techcrunch.com",
+    "search_time": "2025-08-27T17:54:23.434092",
+    "total_articles_found": 20,
+    "processed_articles": 20,
+    "is_starred": false,
+    "last_monitored": "2025-08-27T17:54:23.434101"
   }
 ]

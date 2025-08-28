@@ -1118,7 +1118,7 @@ async def get_comprehensive_history():
         
         # Add blog searches and blog uploads
         for blog_search in blog_searches:
-            if blog_search.get("search_type") == "blog_upload":
+            if "url" in blog_search and blog_search.get("url"):
                 # This is a blog URL upload
                 history.append({
                     "id": blog_search["id"],
