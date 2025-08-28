@@ -338,6 +338,96 @@ def parse_thesis(thesis_text):
                 points.append(line)
         return points, ["thesis", "analysis", "content"]
 
+def calculate_text_similarity(text1: str, text2: str) -> float:
+    """Calculate text similarity using pattern-based analysis (no GPT required)"""
+    try:
+        # Advanced pattern-based similarity calculation
+        from difflib import SequenceMatcher
+        import re
+        
+        # Clean and normalize texts
+        def clean_text(text):
+            # Remove HTML tags, extra whitespace, and normalize
+            text = re.sub(r'<[^>]+>', '', text)
+            text = re.sub(r'\s+', ' ', text).strip().lower()
+            return text
+        
+        clean_text1 = clean_text(text1)
+        clean_text2 = clean_text(text2)
+        
+        # Method 1: Sequence similarity (character-level)
+        sequence_similarity = SequenceMatcher(None, clean_text1, clean_text2).ratio()
+        
+        # Method 2: Word overlap (Jaccard similarity)
+        words1 = set(re.findall(r'\b\w+\b', clean_text1))
+        words2 = set(re.findall(r'\b\w+\b', clean_text2))
+        
+        if words1 and words2:
+            intersection = words1.intersection(words2)
+            union = words1.union(words2)
+            jaccard_similarity = len(intersection) / len(union) if union else 0.0
+        else:
+            jaccard_similarity = 0.0
+        
+        # Method 3: N-gram similarity (3-grams)
+        def get_ngrams(text, n=3):
+            words = text.split()
+            return [' '.join(words[i:i+n]) for i in range(len(words)-n+1)]
+        
+        ngrams1 = set(get_ngrams(clean_text1, 3))
+        ngrams2 = set(get_ngrams(clean_text2, 3))
+        
+        if ngrams1 and ngrams2:
+            ngram_intersection = ngrams1.intersection(ngrams2)
+            ngram_union = ngrams1.union(ngrams2)
+            ngram_similarity = len(ngram_intersection) / len(ngram_union) if ngram_union else 0.0
+        else:
+            ngram_similarity = 0.0
+        
+        # Method 4: Keyword density similarity
+        def get_keyword_density(text):
+            words = re.findall(r'\b\w+\b', text)
+            word_freq = {}
+            for word in words:
+                if len(word) > 3:
+                    word_freq[word] = word_freq.get(word, 0) + 1
+            return word_freq
+        
+        density1 = get_keyword_density(clean_text1)
+        density2 = get_keyword_density(clean_text2)
+        
+        # Calculate keyword overlap
+        common_keywords = set(density1.keys()) & set(density2.keys())
+        total_keywords = set(density1.keys()) | set(density2.keys())
+        
+        if total_keywords:
+            keyword_similarity = len(common_keywords) / len(total_keywords)
+        else:
+            keyword_similarity = 0.0
+        
+        # Weighted combination of all methods
+        final_similarity = (
+            sequence_similarity * 0.3 +
+            jaccard_similarity * 0.3 +
+            ngram_similarity * 0.2 +
+            keyword_similarity * 0.2
+        )
+        
+        print(f"🔍 Pattern-based similarity: sequence={sequence_similarity:.3f}, jaccard={jaccard_similarity:.3f}, ngram={ngram_similarity:.3f}, keyword={keyword_similarity:.3f}, final={final_similarity:.3f}")
+        
+        return min(max(final_similarity, 0.0), 1.0)
+        
+    except Exception as e:
+        print(f"Error in pattern-based similarity: {e}")
+        # Ultimate fallback: simple word overlap
+        words1 = set(text1.lower().split())
+        words2 = set(text2.lower().split())
+        intersection = words1.intersection(words2)
+        union = words1.union(words2)
+        if len(union) == 0:
+            return 0.0
+        return len(intersection) / len(union)
+
 def calculate_semantic_similarity(text1, text2):
     """Calculate semantic similarity between two texts using keyword overlap and content analysis"""
     if not openai.api_key:
@@ -430,108 +520,88 @@ def extract_keywords_from_text(text, max_keywords=8):
         return ["content", "article", "information"]
 
 def analyze_thesis_alignment(article_text: str, thesis_points: list, thesis_keywords: list) -> dict:
-    """Analyze how well an article aligns with the user's thesis"""
-    # Check if OpenAI API key is available
-    if not openai.api_key:
-        # Use the advanced fallback system
-        try:
-            from fallback_matcher import fallback_matcher
-            analysis = fallback_matcher.analyze_thesis_alignment(article_text, ' '.join(thesis_points), thesis_keywords)
-            print(f"🎯 Generated smart fallback thesis alignment: {analysis['overall_score']:.2f}")
-            return analysis
-        except ImportError:
-            # Fallback to basic text analysis
-            alignment_score = 0.0
-            matched_points = []
-            alignment_reasons = []
-            
-            # Simple keyword matching
-            article_lower = article_text.lower()
-            thesis_lower = ' '.join(thesis_keywords).lower()
-            
-            # Count keyword matches
-            keyword_matches = sum(1 for keyword in thesis_keywords if keyword.lower() in article_lower)
-            if thesis_keywords:
-                keyword_score = keyword_matches / len(thesis_keywords)
-                alignment_score += keyword_score * 0.4
-            
-            # Simple point matching
-            for point in thesis_points:
-                point_lower = point.lower()
-                if any(word in article_lower for word in point_lower.split() if len(word) > 3):
-                    matched_points.append(point)
-                    alignment_score += 0.2
-            
-            return {
-                "overall_score": min(alignment_score, 1.0),
-                "matched_points": matched_points,
-                "alignment_reasons": [f"Keyword match: {keyword_matches}/{len(thesis_keywords)}", f"Point matches: {len(matched_points)}"],
-                "analysis_type": "fallback_text_analysis"
-            }
-    
+    """Analyze how well an article aligns with the user's thesis using pattern-based analysis"""
     try:
-        prompt = f"""
-        Analyze how well this article aligns with the user's investment thesis.
+        print(f"🎯 Analyzing thesis alignment using pattern-based system...")
         
-        USER'S THESIS POINTS:
-        {chr(10).join([f"- {point}" for point in thesis_points])}
+        # Use the new pattern-based similarity function
+        alignment_score = 0.0
+        matched_points = []
+        alignment_reasons = []
         
-        USER'S KEYWORDS:
-        {', '.join(thesis_keywords)}
+        # Method 1: Keyword matching with pattern analysis
+        article_lower = article_text.lower()
+        thesis_keywords_lower = [kw.lower() for kw in thesis_keywords]
         
-        ARTICLE TEXT:
-        {article_text[:3000]}
+        # Calculate keyword similarity using pattern matching
+        keyword_matches = 0
+        for keyword in thesis_keywords_lower:
+            if keyword in article_lower:
+                keyword_matches += 1
         
-        Provide a detailed analysis in the following JSON format:
-        {{
-            "overall_score": 0.85,
-            "matched_points": ["Point 1", "Point 2"],
-            "alignment_reasons": [
-                "Strong alignment with renewable energy focus",
-                "Direct mention of AI data centers",
-                "Investment scale matches thesis criteria"
-            ],
-            "key_insights": "Brief explanation of why this article is relevant",
-            "investment_implications": "What this means for the investment thesis"
-        }}
+        keyword_score = 0.0
+        if thesis_keywords:
+            keyword_score = keyword_matches / len(thesis_keywords)
+            alignment_score += keyword_score * 0.4
+            alignment_reasons.append(f"Keyword match: {keyword_matches}/{len(thesis_keywords)} ({keyword_score:.2f})")
         
-        Score from 0.0 (no alignment) to 1.0 (perfect alignment).
-        """
+        # Method 2: Thesis point matching using similarity
+        point_scores = []
+        for point in thesis_points:
+            point_similarity = calculate_text_similarity(point, article_text)
+            point_scores.append(point_similarity)
+            if point_similarity > 0.3:  # Threshold for considering a point matched
+                matched_points.append(point)
+                alignment_score += point_similarity * 0.3
         
-        response = openai.chat.completions.create(
-            model="gpt-4o",  # Use GPT-4o for best performance
-            messages=[
-                {"role": "system", "content": "You are an expert investment analyst who evaluates content relevance to investment theses. Provide accurate, detailed analysis."},
-                {"role": "user", "content": prompt}
-            ],
-            max_tokens=500,
-            temperature=0.1
-        )
+        # Method 3: Overall content similarity
+        thesis_content = ' '.join(thesis_points + thesis_keywords)
+        content_similarity = calculate_text_similarity(thesis_content, article_text)
+        alignment_score += content_similarity * 0.3
         
-        content = response.choices[0].message.content.strip()
+        # Method 4: Domain-specific scoring
+        domain_keywords = {
+            'renewable': ['solar', 'wind', 'battery', 'energy', 'sustainable', 'green'],
+            'tech': ['startup', 'funding', 'venture', 'capital', 'innovation', 'technology'],
+            'business': ['market', 'company', 'investment', 'growth', 'revenue', 'profit']
+        }
         
-        try:
-            # Try to parse JSON response
-            import json
-            analysis = json.loads(content)
-            return analysis
-        except json.JSONDecodeError:
-            # Fallback parsing
-            return {
-                "overall_score": 0.7,
-                "matched_points": thesis_points[:2] if thesis_points else [],
-                "alignment_reasons": ["AI analysis completed but parsing failed"],
-                "analysis_type": "ai_analysis_parsing_failed"
+        domain_score = 0.0
+        for domain, keywords in domain_keywords.items():
+            domain_matches = sum(1 for kw in keywords if kw in article_lower)
+            if keywords:
+                domain_score += (domain_matches / len(keywords)) * 0.1
+        
+        alignment_score += domain_score
+        
+        # Ensure score is between 0 and 1
+        final_score = min(max(alignment_score, 0.0), 1.0)
+        
+        avg_point_similarity = sum(point_scores)/len(point_scores) if point_scores else 0.0
+        print(f"🎯 Pattern-based thesis alignment: keyword_score={keyword_score:.3f}, point_similarity={avg_point_similarity:.3f}, content_similarity={content_similarity:.3f}, final_score={final_score:.3f}")
+        
+        return {
+            "overall_score": final_score,
+            "matched_points": matched_points,
+            "alignment_reasons": alignment_reasons,
+            "analysis_type": "pattern_based_analysis",
+            "detailed_scores": {
+                "keyword_score": keyword_score,
+                "point_similarity": avg_point_similarity,
+                "content_similarity": content_similarity,
+                "domain_score": domain_score
             }
-            
+        }
+        
     except Exception as e:
-        print(f"Error analyzing thesis alignment: {e}")
-        # Fallback analysis
+        print(f"Error in pattern-based thesis alignment: {e}")
+        # Ultimate fallback
         return {
             "overall_score": 0.5,
             "matched_points": [],
-            "alignment_reasons": [f"Analysis failed: {str(e)}"],
-            "analysis_type": "error_fallback"
+            "alignment_reasons": ["Fallback analysis due to error"],
+            "analysis_type": "fallback_error",
+            "detailed_scores": {}
         }
 
 def extract_keywords_from_summary(summary, max_keywords=8):
