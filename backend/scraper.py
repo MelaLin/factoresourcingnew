@@ -532,23 +532,41 @@ def get_patent_search_urls(base_url: str, query: str = None) -> List[str]:
     return patent_urls
 
 async def search_google_scholar(keyword: str, max_results: int = 30) -> List[Dict]:
-    """Search Google Scholar for academic papers"""
+    """Search Google Scholar for academic papers using multiple strategies"""
     try:
         print(f"🔍 Searching Google Scholar for: {keyword}")
         
-        # Google Scholar search URL
-        search_url = f"https://scholar.google.com/scholar?q={keyword.replace(' ', '+')}"
+        # Multiple search strategies
+        search_strategies = [
+            # Strategy 1: Direct Google Scholar search
+            f"https://scholar.google.com/scholar?q={keyword.replace(' ', '+')}&hl=en&as_sdt=0%2C5",
+            # Strategy 2: Google Scholar with specific parameters
+            f"https://scholar.google.com/scholar?q={keyword.replace(' ', '+')}&hl=en&as_sdt=2022&as_vis=1",
+            # Strategy 3: Google Scholar recent papers
+            f"https://scholar.google.com/scholar?q={keyword.replace(' ', '+')}&hl=en&as_sdt=0%2C5&as_ylo=2023",
+        ]
         
-        # Enhanced headers for Google Scholar
+        # Enhanced headers with rotation
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0'
+        ]
+        
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': user_agents[hash(keyword) % len(user_agents)],
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
             'DNT': '1',
             'Connection': 'keep-alive',
             'Upgrade-Insecure-Requests': '1',
-            'Referer': 'https://www.google.com/'
+            'Referer': 'https://www.google.com/',
+            'Sec-Fetch-Dest': 'document',
+            'Sec-Fetch-Mode': 'navigate',
+            'Sec-Fetch-Site': 'cross-site',
+            'Cache-Control': 'max-age=0'
         }
         
         ssl_context = ssl.create_default_context()
@@ -557,106 +575,159 @@ async def search_google_scholar(keyword: str, max_results: int = 30) -> List[Dic
         
         timeout = aiohttp.ClientTimeout(total=30, connect=10)
         
-        async with aiohttp.ClientSession(
-            headers=headers, 
-            timeout=timeout,
-            connector=aiohttp.TCPConnector(ssl=ssl_context)
-        ) as session:
-            async with session.get(search_url) as response:
-                if response.status != 200:
-                    print(f"❌ Failed to fetch Google Scholar: {response.status}")
-                    return []
+        results = []
+        
+        # Try multiple search strategies
+        for strategy_idx, search_url in enumerate(search_strategies):
+            if len(results) >= max_results:
+                break
                 
-                html = await response.text()
-                print(f"✅ Successfully fetched Google Scholar results ({len(html)} characters)")
-                
-                # Parse with BeautifulSoup
-                soup = BeautifulSoup(html, 'html.parser')
-                
-                # Check if we got blocked or got an error page
-                page_title = soup.find('title')
-                if page_title:
-                    page_title_text = page_title.get_text().lower()
-                    if any(blocked in page_title_text for blocked in ['captcha', 'blocked', 'robot', 'unusual traffic', 'verify']):
-                        print("🚫 Google Scholar blocked the request (detected captcha/blocking page)")
-                        raise Exception("Google Scholar blocked the request")
-                
-                results = []
-                # Look for Google Scholar result divs
-                scholar_results = soup.find_all('div', class_='gs_r gs_or gs_scl')
-                
-                # If no results found with the expected class, try alternative selectors
-                if not scholar_results:
-                    print("🔍 No results with expected class, trying alternative selectors...")
-                    # Try different possible selectors
-                    scholar_results = soup.find_all('div', class_='gs_r')
-                    if not scholar_results:
-                        scholar_results = soup.find_all('div', class_='gs_or')
-                    if not scholar_results:
-                        scholar_results = soup.find_all('div', class_='gs_scl')
-                
-                print(f"🔍 Found {len(scholar_results)} potential result elements")
-                
-                for i, result in enumerate(scholar_results[:max_results]):
-                    try:
-                        # Extract title and link
-                        title_elem = result.find('h3', class_='gs_rt')
-                        if not title_elem:
+            print(f"🔍 Trying strategy {strategy_idx + 1}: {search_url}")
+            
+            try:
+                async with aiohttp.ClientSession(
+                    headers=headers, 
+                    timeout=timeout,
+                    connector=aiohttp.TCPConnector(ssl=ssl_context)
+                ) as session:
+                    async with session.get(search_url) as response:
+                        if response.status != 200:
+                            print(f"❌ Strategy {strategy_idx + 1} failed: {response.status}")
                             continue
-                            
-                        title = title_elem.get_text(strip=True)
-                        link_elem = title_elem.find('a')
-                        url = link_elem.get('href') if link_elem else ""
                         
-                        # Extract authors and year
-                        authors_elem = result.find('div', class_='gs_a')
-                        authors = []
-                        year = None
-                        if authors_elem:
-                            authors_text = authors_elem.get_text(strip=True)
-                            # Parse authors and year from text like "J Smith, A Johnson - 2023"
-                            if ' - ' in authors_text:
-                                authors_part = authors_text.split(' - ')[0]
-                                authors = [author.strip() for author in authors_part.split(',')]
+                        html = await response.text()
+                        print(f"✅ Strategy {strategy_idx + 1} fetched ({len(html)} characters)")
+                        
+                        # Parse with BeautifulSoup
+                        soup = BeautifulSoup(html, 'html.parser')
+                        
+                        # Check if we got blocked or got an error page
+                        page_title = soup.find('title')
+                        if page_title:
+                            page_title_text = page_title.get_text().lower()
+                            if any(blocked in page_title_text for blocked in ['captcha', 'blocked', 'robot', 'unusual traffic', 'verify', 'sorry']):
+                                print(f"🚫 Strategy {strategy_idx + 1} blocked by Google Scholar")
+                                continue
+                        
+                        # Multiple parsing strategies for Google Scholar results
+                        parsing_strategies = [
+                            # Strategy 1: Standard Google Scholar result divs
+                            soup.find_all('div', class_='gs_r gs_or gs_scl'),
+                            # Strategy 2: Alternative class combinations
+                            soup.find_all('div', class_='gs_r'),
+                            soup.find_all('div', class_='gs_or'),
+                            soup.find_all('div', class_='gs_scl'),
+                            # Strategy 3: Look for any div with gs_ prefix
+                            [div for div in soup.find_all('div') if any(cls.startswith('gs_') for cls in div.get('class', []))],
+                            # Strategy 4: Look for article-like content
+                            soup.find_all('div', class_='gs_ri'),
+                            # Strategy 5: Look for any content that looks like a paper
+                            [div for div in soup.find_all('div') if div.find('h3') and div.find('div', class_='gs_a')]
+                        ]
+                        
+                        strategy_results = []
+                        for parse_strategy_idx, parse_strategy in enumerate(parsing_strategies):
+                            if len(strategy_results) > 0:
+                                break
                                 
-                                # Try to extract year
-                                year_match = re.search(r'(\d{4})', authors_text)
-                                if year_match:
-                                    year = int(year_match.group(1))
+                            print(f"   🔍 Trying parsing strategy {parse_strategy_idx + 1}: {len(parse_strategy)} elements")
+                            
+                            for i, result in enumerate(parse_strategy[:max_results - len(results)]):
+                                try:
+                                    # Extract title and link
+                                    title_elem = result.find('h3', class_='gs_rt')
+                                    if not title_elem:
+                                        # Try alternative title selectors
+                                        title_elem = result.find('h3')
+                                        if not title_elem:
+                                            title_elem = result.find('a', href=True)
+                                    
+                                    if not title_elem:
+                                        continue
+                                        
+                                    title = title_elem.get_text(strip=True)
+                                    if not title or len(title) < 10:
+                                        continue
+                                    
+                                    # Extract URL
+                                    if title_elem.name == 'a':
+                                        url = title_elem.get('href')
+                                    else:
+                                        link_elem = title_elem.find('a')
+                                        url = link_elem.get('href') if link_elem else ""
+                                    
+                                    # Skip if no URL or invalid URL
+                                    if not url or not url.startswith('http'):
+                                        continue
+                                    
+                                    # Extract authors and year
+                                    authors_elem = result.find('div', class_='gs_a')
+                                    authors = []
+                                    year = None
+                                    if authors_elem:
+                                        authors_text = authors_elem.get_text(strip=True)
+                                        # Parse authors and year from text like "J Smith, A Johnson - 2023"
+                                        if ' - ' in authors_text:
+                                            authors_part = authors_text.split(' - ')[0]
+                                            authors = [author.strip() for author in authors_part.split(',')]
+                                            
+                                            # Try to extract year
+                                            year_match = re.search(r'(\d{4})', authors_text)
+                                            if year_match:
+                                                year = int(year_match.group(1))
+                                    
+                                    # Extract abstract
+                                    abstract_elem = result.find('div', class_='gs_rs')
+                                    abstract = abstract_elem.get_text(strip=True) if abstract_elem else ""
+                                    
+                                    # Extract citation count
+                                    citations_elem = result.find('div', class_='gs_fl')
+                                    citations = 0
+                                    if citations_elem:
+                                        citations_text = citations_elem.get_text()
+                                        citations_match = re.search(r'Cited by (\d+)', citations_text)
+                                        if citations_match:
+                                            citations = int(citations_match.group(1))
+                                    
+                                    # Create result object
+                                    result_obj = {
+                                        "title": title,
+                                        "url": url,
+                                        "authors": authors,
+                                        "abstract": abstract,
+                                        "year": year,
+                                        "citations": citations,
+                                        "source": "Google Scholar"
+                                    }
+                                    
+                                    # Avoid duplicates
+                                    if not any(r['url'] == url for r in strategy_results):
+                                        strategy_results.append(result_obj)
+                                        print(f"   📚 Found: {title[:50]}...")
+                                
+                                except Exception as e:
+                                    print(f"   ❌ Error processing result {i+1}: {e}")
+                                    continue
                         
-                        # Extract abstract
-                        abstract_elem = result.find('div', class_='gs_rs')
-                        abstract = abstract_elem.get_text(strip=True) if abstract_elem else ""
+                        # Add strategy results to main results
+                        results.extend(strategy_results)
+                        print(f"✅ Strategy {strategy_idx + 1} found {len(strategy_results)} results")
                         
-                        # Extract citation count
-                        citations_elem = result.find('div', class_='gs_fl')
-                        citations = 0
-                        if citations_elem:
-                            citations_text = citations_elem.get_text()
-                            citations_match = re.search(r'Cited by (\d+)', citations_text)
-                            if citations_match:
-                                citations = int(citations_match.group(1))
+                        # If we got enough results, stop trying more strategies
+                        if len(results) >= max_results:
+                            break
+                            
+                        # Add delay between strategies to avoid rate limiting
+                        await asyncio.sleep(1)
                         
-                        results.append({
-                            "title": title,
-                            "url": url,
-                            "authors": authors,
-                            "abstract": abstract,
-                            "year": year,
-                            "citations": citations,
-                            "source": "Google Scholar"
-                        })
-                        
-                        print(f"   📚 Found: {title[:50]}...")
-                        
-                    except Exception as e:
-                        print(f"   ❌ Error processing result {i+1}: {e}")
-                        continue
-                
-                print(f"📚 Total Google Scholar results found: {len(results)}")
-                
-                # If no results found, return mock data for testing
-                if len(results) == 0:
+            except Exception as e:
+                print(f"❌ Strategy {strategy_idx + 1} failed: {e}")
+                continue
+        
+        print(f"📚 Total Google Scholar results found: {len(results)}")
+        
+        # If no results found, return mock data for testing
+        if len(results) == 0:
                     print("⚠️  No real results found, returning mock data for testing")
                     try:
                         from mock_data import get_mock_scholar_results
@@ -695,16 +766,30 @@ async def search_google_scholar(keyword: str, max_results: int = 30) -> List[Dic
             return []
 
 async def search_google_patents(keyword: str, max_results: int = 30) -> List[Dict]:
-    """Search Google Patents for recent patents related to a keyword"""
+    """Search Google Patents for recent patents using multiple strategies"""
     try:
         print(f"🔬 Searching Google Patents for: {keyword}")
         
-        # Google Patents search URL
-        search_url = f"https://patents.google.com/?q=({keyword})&oq={keyword}&sort=new"
+        # Multiple search strategies for Google Patents
+        search_strategies = [
+            # Strategy 1: Direct Google Patents search
+            f"https://patents.google.com/?q=({keyword})&oq={keyword}&sort=new",
+            # Strategy 2: Google Patents with different parameters
+            f"https://patents.google.com/?q={keyword}&language=ENGLISH&sort=new",
+            # Strategy 3: Google Patents recent patents
+            f"https://patents.google.com/?q={keyword}&language=ENGLISH&sort=new&num=100",
+        ]
         
-        # Enhanced headers for Google Patents
+        # Enhanced headers with rotation
+        user_agents = [
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/121.0'
+        ]
+        
         headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+            'User-Agent': user_agents[hash(keyword) % len(user_agents)],
             'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
             'Accept-Language': 'en-US,en;q=0.9',
             'Accept-Encoding': 'gzip, deflate, br',
@@ -714,7 +799,8 @@ async def search_google_patents(keyword: str, max_results: int = 30) -> List[Dic
             'Referer': 'https://www.google.com/',
             'Sec-Fetch-Dest': 'document',
             'Sec-Fetch-Mode': 'navigate',
-            'Sec-Fetch-Site': 'cross-site'
+            'Sec-Fetch-Site': 'cross-site',
+            'Cache-Control': 'max-age=0'
         }
         
         ssl_context = ssl.create_default_context()
