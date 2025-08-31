@@ -38,7 +38,7 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
   const [patentResults, setPatentResults] = useState<PatentResult[]>([]);
   const [activeTab, setActiveTab] = useState('scholar');
 
-  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000';
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://factoresourcing-app.onrender.com';
 
   const testBackend = async () => {
     try {
