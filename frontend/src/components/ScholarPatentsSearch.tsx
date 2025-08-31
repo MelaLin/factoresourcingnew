@@ -87,8 +87,8 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
           url: source.url,
           authors: source.authors || ['Author information available'],
           abstract: source.summary,
-          year: source.publish_date || new Date().getFullYear(),
-          citations: 0,
+          year: source.year || source.publish_date || new Date().getFullYear(),
+          citations: source.citations || 0,
           source: 'Google Scholar'
         })));
         
@@ -102,7 +102,7 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
           authors: source.authors || ['Inventor information available'],
           abstract: source.summary,
           publish_date: source.publish_date || new Date().toISOString(),
-          patent_number: source.url.split('/').pop() || 'Unknown',
+          patent_number: source.patent_number || source.url.split('/').pop() || 'Unknown',
           source: 'Google Patents'
         })));
         
@@ -112,6 +112,13 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
         }
         
         console.log(`📊 Found ${scholarSources.length} scholar papers and ${patentSources.length} patents`);
+        console.log('🔍 Setting scholar results:', scholarSources.length);
+        console.log('🔍 Setting patent results:', patentSources.length);
+        
+        // Show success message
+        if (scholarSources.length > 0 || patentSources.length > 0) {
+          alert(`✅ Search successful! Found ${scholarSources.length} papers and ${patentSources.length} patents. Check the tabs below to see results.`);
+        }
       } else {
         const errorText = await response.text();
         console.error('❌ Keyword search failed:', response.status, response.statusText);
