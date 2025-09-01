@@ -39,6 +39,9 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
   const [activeTab, setActiveTab] = useState('scholar');
 
   const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://factoresourcing-app.onrender.com';
+  
+  // Force cache refresh by adding version parameter
+  const CACHE_BUSTER = Date.now();
 
   const testBackend = async () => {
     try {
@@ -59,7 +62,9 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
     setIsSearching(true);
     try {
       console.log('🔍 Starting comprehensive keyword search for:', keyword);
-      console.log('🔍 API URL:', `${API_BASE_URL}/api/search/keyword`);
+      console.log('🔍 API_BASE_URL:', API_BASE_URL);
+      console.log('🔍 Full API URL:', `${API_BASE_URL}/api/search/keyword`);
+      console.log('🔍 Cache buster:', CACHE_BUSTER);
       console.log('🔍 Request payload:', { keyword: keyword.trim() });
       
       const response = await fetch(`${API_BASE_URL}/api/search/keyword`, {
@@ -148,6 +153,9 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
     if (!keyword.trim()) return;
     
     console.log('🔍 Starting patents search for:', keyword);
+    console.log('🔍 API_BASE_URL:', API_BASE_URL);
+    console.log('🔍 Full API URL:', `${API_BASE_URL}/api/search/keyword`);
+    console.log('🔍 Cache buster:', CACHE_BUSTER);
     setIsSearching(true);
     
     try {
