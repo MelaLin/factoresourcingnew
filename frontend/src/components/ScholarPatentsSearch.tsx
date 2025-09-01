@@ -7,6 +7,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Search, BookOpen, FileText, Loader2, ExternalLink } from 'lucide-react';
 
+// Version check to ensure updated code is loaded
+const COMPONENT_VERSION = 'v2.0.1';
+
 interface ScholarResult {
   title: string;
   url: string;
@@ -42,6 +45,11 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
   
   // Force cache refresh by adding version parameter
   const CACHE_BUSTER = Date.now();
+
+  // Log component version on load
+  console.log(`🎯 ScholarPatentsSearch Component ${COMPONENT_VERSION} loaded`);
+  console.log(`🔧 API_BASE_URL: ${API_BASE_URL}`);
+  console.log(`⏰ Cache buster: ${CACHE_BUSTER}`);
 
   const testBackend = async () => {
     try {

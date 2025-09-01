@@ -14,7 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { TrendingUp, FileSearch, Zap, Star, Globe, FileText } from 'lucide-react';
 
 // API base URL - when served from backend, use relative paths
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '';
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'https://factoresourcing-app.onrender.com';
 
 // Empty initial state for matched content
 const initialMatchedContent: any[] = [];
