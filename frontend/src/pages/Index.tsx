@@ -4,7 +4,7 @@ import { ThesisTextInput } from '@/components/ThesisTextInput';
 import { ContentMatchView } from '@/components/ContentMatchView';
 import { BlogUpload } from '@/components/BlogUpload';
 
-import { ScholarPatentsSearch } from '@/components/ScholarPatentsSearch';
+import { SimpleSearch } from '@/components/SimpleSearch';
 import { Revisions } from '@/components/Revisions';
 
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -257,26 +257,10 @@ const Index = () => {
                 />
               </div>
 
-              {/* Scholar & Patents Search */}
+              {/* Simple Google Search */}
               <div className="space-y-4">
-                <ScholarPatentsSearch 
-                  onResultsFound={(results) => {
-                    console.log('Scholar/Patents results found:', results);
-                    
-                    // Process the results
-                    if (results && results.length > 0) {
-                      // Extract URLs from results
-                      const newUrls = results.map((result: any) => result.url).filter(Boolean);
-                      setSources(prev => [...new Set([...prev, ...newUrls])]);
-                      
-                      // Show success message
-                      console.log(`✅ Added ${results.length} new sources from search`);
-                    }
-                    
-                    // Trigger matches refresh to show new content
-                    fetchMatches();
-                  }}
-                />
+                <SimpleSearch />
+              </div>
                 
 
               </div>
