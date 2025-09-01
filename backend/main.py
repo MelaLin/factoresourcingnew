@@ -1,6 +1,7 @@
 from fastapi import FastAPI, UploadFile, File, HTTPException, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
+from fastapi.responses import HTMLResponse
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 from typing import List, Optional, Dict
@@ -362,12 +363,23 @@ frontend_path = Path(__file__).parent / "frontend"
 print(f"🔍 Frontend path: {frontend_path}")
 print(f"🔍 Frontend exists: {frontend_path.exists()}")
 
-# Only mount static files if the directory exists (local development)
+# Mount static files if the directory exists (works for both local and production)
 if frontend_path.exists() and (frontend_path / "assets").exists():
     app.mount("/assets", StaticFiles(directory=str(frontend_path / "assets")), name="assets")
-    print(f"✅ Static files mounted from: {frontend_path / 'assets'} (local development)")
+    print(f"✅ Static files mounted from: {frontend_path / 'assets'}")
+    
+    # Also serve the main index.html file
+    @app.get("/", response_class=HTMLResponse)
+    async def serve_frontend():
+        index_path = frontend_path / "index.html"
+        if index_path.exists():
+            with open(index_path, "r") as f:
+                return HTMLResponse(content=f.read())
+        else:
+            return HTMLResponse(content="<h1>Frontend not found</h1><p>Please build the frontend first.</p>")
 else:
-    print(f"ℹ️  Static files not mounted - frontend will be served separately in production")
+    print(f"❌ Frontend assets not found at: {frontend_path}")
+    print(f"   Available files: {list(Path(__file__).parent.iterdir())}")
 
 # Data models
 class SourceRequest(BaseModel):

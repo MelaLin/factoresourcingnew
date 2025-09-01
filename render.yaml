@@ -6,6 +6,12 @@ services:
     plan: starter
     rootDir: backend
     buildCommand: |
+      # Build frontend first
+      cd ../frontend
+      npm install
+      npm run build
+      cd ../backend
+      # Install backend dependencies
       pip install -r requirements.txt
       # Copy frontend assets
       cp -r ../frontend/dist/* frontend/
