@@ -75,7 +75,7 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
       console.log('🔍 Cache buster:', CACHE_BUSTER);
       console.log('🔍 Request payload:', { keyword: keyword.trim() });
       
-      const response = await fetch(`${API_BASE_URL}/api/search/keyword`, {
+      const response = await fetch(`${API_BASE_URL}/api/search/keyword?v=${CACHE_BUSTER}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -169,7 +169,7 @@ export const ScholarPatentsSearch = ({ onResultsFound }: ScholarPatentsSearchPro
     try {
       console.log('📡 Making API request to comprehensive keyword search');
       
-      const response = await fetch(`${API_BASE_URL}/api/search/keyword`, {
+      const response = await fetch(`${API_BASE_URL}/api/search/keyword?v=${CACHE_BUSTER}`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
